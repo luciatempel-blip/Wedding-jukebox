@@ -179,7 +179,7 @@ export default function App() {
 
       {/* Configuration Settings Modal */}
       <ConfigModal
-        isOpen={isConfigOpen}
+        isOpen={isConfigOpen && adminUnlocked}
         onClose={() => setIsConfigOpen(false)}
         config={config}
         onSaveConfig={handleSaveConfig}

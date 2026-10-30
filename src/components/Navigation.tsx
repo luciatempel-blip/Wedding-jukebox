@@ -31,7 +31,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   const [pinError, setPinError] = useState(false);
 
   const handleNavClick = (view: ViewMode) => {
-    if ((view === 'dj' || view === 'admin') && !adminUnlocked) {
+    if ((view === 'dj' || view === 'admin' || view === 'config') && !adminUnlocked) {
       setPinTarget(view);
       setEnteredPin('');
       setPinError(false);
@@ -181,6 +181,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               title="Settings"
             >
               <Settings className="w-3.5 h-3.5" />
+              {!adminUnlocked && <Lock className="w-3 h-3 text-[#b85433]" />}
             </button>
           </nav>
 
@@ -264,6 +265,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         >
           <Settings className="w-5 h-5" />
           <span>Config</span>
+          {!adminUnlocked && <Lock className="w-3 h-3 text-[#b85433]" />}
         </button>
       </div>
 
@@ -278,7 +280,9 @@ export const Navigation: React.FC<NavigationProps> = ({
               Host Security Check
             </h3>
             <p className="text-xs text-center text-[#756c64] mb-5">
-              Please enter the admin PIN to open the {pinTarget === 'dj' ? 'DJ Console' : 'Admin Area'}.
+              Please enter the admin PIN to open the {
+                pinTarget === 'dj' ? 'DJ Console' : pinTarget === 'config' ? 'Configuration' : 'Admin Area'
+              }.
             </p>
 
             <form onSubmit={handlePinSubmit} className="space-y-4">
@@ -292,7 +296,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                     setEnteredPin(e.target.value);
                     setPinError(false);
                   }}
-                  placeholder="Enter PIN (e.g. 20260106)"
+                  placeholder="Enter admin PIN"
                   className="w-full text-center text-xl font-bold tracking-widest px-4 py-3 rounded-xl border-2 border-[#ebdcd2] focus:border-[#476127] outline-hidden transition-all bg-[#fcfaf5]"
                   autoFocus
                 />
