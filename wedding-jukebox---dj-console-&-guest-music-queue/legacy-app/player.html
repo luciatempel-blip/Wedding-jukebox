@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wedding Player & Console</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="player">
+<div id="demoBanner" class="demo" hidden></div>
+
+<!-- Host Control Bar -->
+<header class="host-bar">
+  <div class="host-info">
+    <span id="menuMount"></span>
+    <span class="eyebrow" id="names" style="color:var(--muted); margin:0;"></span>
+    <span class="host-title">DJ Console</span>
+  </div>
+  <div class="host-actions">
+ <button id="skipBtn" class="btn mini skip-btn"><i class="fa-solid fa-forward-step"></i> Skip song</button>
+<button id="musicBtn" class="btn ghost mini"><i class="fa-solid fa-pause"></i> Pause music</button>
+<label class="vol" title="Master volume"><i class="fa-solid fa-volume-high"></i> <input id="volSlider" type="range" min="0" max="100" value="100" aria-label="Volume"></label>
+<button id="shuffleBtn" class="btn ghost mini"><i class="fa-solid fa-shuffle"></i> Shuffle requests</button>
+<button id="moreBtn" class="btn ghost mini more-btn" type="button" aria-expanded="false" aria-controls="hostMore"><i class="fa-solid fa-ellipsis"></i> More controls</button>
+
+<div id="hostMore" class="host-more">
+  <button id="pauseRequestsBtn" class="btn ghost mini"><i class="fa-solid fa-circle-pause"></i> Pause guest requests</button>
+  <button id="qrModalBtn" class="btn ghost mini"><i class="fa-solid fa-qrcode"></i> QR sign</button>
+  <button id="resetQueueBtn" class="btn danger mini"><i class="fa-solid fa-trash-can"></i> Clear queue</button>
+</div>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="main-col">
+
+    <!-- shown until the music is started. It sits above the player, never on top of it -->
+    <div id="startOverlay" class="start-card">
+      <h1>Music player</h1>
+      <p class="small" style="max-width:420px;margin:0">Connect this device to the sound system, turn its volume up, and tap below.</p>
+      <button id="startBtn" class="btn"><i class="fa-solid fa-play"></i> Start the music</button>
+      <p id="startStatus" class="small" style="margin:0"></p>
+    </div>
+
+    <div id="tapOverlay" class="tap-bar" hidden>
+      <span>The browser paused the music. Tap to carry on.</span>
+      <button id="tapBtn" class="btn"><i class="fa-solid fa-play"></i> Play</button>
+    </div>
+
+    <div class="np-panel">
+      <!-- The YouTube player has to stay visible, so it is kept small and used like cover art.
+           Two decks let one song fade out while the next fades in. -->
+      <div class="screen mini">
+        <div class="yt-container" id="deckA"><div id="ytA"></div></div>
+        <div class="yt-container" id="deckB"><div id="ytB"></div></div>
+      </div>
+
+      <div class="np-info">
+        <div class="np-label">Now playing</div>
+        <div class="np-title" id="npTitle">Waiting to start&hellip;</div>
+        <p class="np-artist" id="npArtist"></p>
+        <div class="np-progress" id="npBar" hidden>
+          <div class="np-track"><div class="np-fill" id="npFill"></div></div>
+          <div class="np-times"><span id="npPos">0:00</span><span id="npDur">0:00</span></div>
+        </div>
+        <p class="status" id="status"></p>
+        <p class="status" id="iosNote" hidden>iPad or iPhone detected. The browser doesn&rsquo;t allow volume control from a web page, so songs play one after another without a blend and the volume slider is off. Use the device&rsquo;s volume buttons, or run this page on a laptop to get the blend.</p>
+      </div>
+    </div>
+  </div>
+
+  <aside class="side">
+    <h2>Up next <span id="count"></span></h2>
+    <ol id="list" class="queue"></ol>
+  </aside>
+</div>
+
+<!-- QR Code Modal -->
+<div id="qrModal" class="modal-overlay" hidden>
+  <div class="modal-card sign-modal">
+    <button id="closeQrBtn" class="close-btn"><i class="fa-solid fa-xmark"></i></button>
+    <p class="eyebrow" id="signNames"></p>
+    <h3>Scan to pick songs</h3>
+    <div class="qr" id="qr"></div>
+    <p class="url" id="signUrl"></p>
+    <div class="row" style="margin-top:16px;">
+      <button id="printQrBtn" class="btn">Print sign</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script src="config.js"></script>
+<script src="qrcode.js"></script>
+<script src="common.js"></script>
+<script src="player.js"></script>
+</body>
+</html>

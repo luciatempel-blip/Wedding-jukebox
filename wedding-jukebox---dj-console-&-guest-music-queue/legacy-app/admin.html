@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="demoBanner" class="demo" hidden></div>
+<main class="wrap">
+  <div class="topbar" id="menuMount"></div>
+
+  <section id="gate" class="card" hidden>
+    <h1 style="font-size:24px">Admin</h1>
+    <form id="gateForm">
+      <div class="field"><label for="pin">Admin PIN</label>
+        <input id="pin" type="password" inputmode="numeric" autocomplete="off"></div>
+      <button class="btn" type="submit" style="width:100%">Open</button>
+      <p id="gateErr" class="small" style="color:var(--warn)" hidden>That's not right &ndash; try again.</p>
+    </form>
+  </section>
+
+  <div id="panel" hidden>
+    <h1 style="font-size:26px;text-align:left">Jukebox admin</h1>
+
+    <div class="card">
+      <div class="row">
+        <button id="skipBtn" class="btn"><i class="fa-solid fa-forward-step"></i> Skip current song</button>
+        <button id="musicBtn" class="btn ghost"><i class="fa-solid fa-pause"></i> Pause music</button>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label for="vol">Volume <b id="volLabel">100%</b></label>
+        <input id="vol" class="range" type="range" min="0" max="100" value="100">
+        <p id="volNote" class="small" style="color:var(--warn);margin:4px 0 0" hidden>The player is running on an iPad/iPhone, which doesn&rsquo;t allow volume control from a web page. Use the device&rsquo;s own volume buttons.</p>
+      </div>
+      <div class="row">
+        <button id="pauseBtn" class="btn ghost"><i class="fa-solid fa-circle-pause"></i> Pause guest requests</button>
+      </div>
+      <p class="small" style="color:var(--muted);margin:10px 0 0">Now playing: <b id="np">&ndash;</b></p>
+      <p class="small" style="color:var(--muted);margin:4px 0 0">These buttons control the player page. The player page must be open and started.</p>
+    </div>
+
+    <h2>Up next <span id="count"></span></h2>
+    <div class="row" style="margin-bottom:6px">
+      <button id="shuffleBtn" class="btn ghost"><i class="fa-solid fa-shuffle"></i> Shuffle the requests</button>
+    </div>
+    <ol id="list" class="queue"></ol>
+
+    <h2>Recently played</h2>
+    <p id="replayNote" class="small" style="color:var(--muted);margin:0 0 6px"></p>
+    <ol id="played" class="queue"></ol>
+
+    <h2>QR code sign</h2>
+    <div class="card">
+      <div class="field"><label for="guestUrl">Address guests will open</label>
+        <input id="guestUrl" type="url"></div>
+      <div class="row">
+        <button id="printBtn" class="btn">Print / save sign as PDF</button>
+        <a id="openPlayer" class="btn ghost" style="text-decoration:none;display:flex;align-items:center;justify-content:center" href="player.html">Open the player page</a>
+      </div>
+    </div>
+    <div class="sign" id="sign">
+      <p class="eyebrow" id="signNames"></p>
+      <h3>Add a song to the playlist</h3>
+      <p>Scan with your phone camera</p>
+      <div class="qr" id="qr"></div>
+      <p>Search your favourite, tap <b>Add</b> &ndash; that&rsquo;s it! <i class="fa-solid fa-music"></i></p>
+      <p class="url" id="signUrl"></p>
+    </div>
+
+    <h2>Danger zone</h2>
+    <div class="card">
+      <button id="resetBtn" class="btn danger" style="width:100%">Clear the whole queue &amp; history</button>
+    </div>
+  </div>
+</main>
+<div id="toast" role="status"></div>
+
+<script src="config.js"></script>
+<script src="qrcode.js"></script>
+<script src="common.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

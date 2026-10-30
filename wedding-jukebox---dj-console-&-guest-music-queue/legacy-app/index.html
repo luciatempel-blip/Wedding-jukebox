@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Add a song</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="demoBanner" class="demo" hidden></div>
+
+<main class="wrap">
+  <div class="topbar" id="menuMount"></div>
+  <header class="hero">
+    <p class="eyebrow" id="names"></p>
+    <h1>Pick a song to keep the vibe going</h1>
+    <p class="sub">Search your favourite, tap <b>Add</b>, and it joins the queue.</p>
+  </header>
+
+  <!-- Live "now playing" card: shows on both tabs, updates by itself -->
+  <section id="nowCard" class="np-card" aria-live="polite">
+    <div class="np-row">
+      <div id="npThumb"></div>
+      <div class="meta">
+        <div class="np-label"><span id="npEq" class="eq" hidden><i></i><i></i><i></i></span><span id="npLabel">Now playing</span></div>
+        <div class="t" id="npTitle">The music is about to start!</div>
+        <div class="a" id="npArtist"></div>
+      </div>
+    </div>
+    <div id="npBar" hidden>
+      <div class="np-track"><div id="npFill" class="np-fill"></div></div>
+      <div class="np-times"><span id="npPos">0:00</span><span id="npDur">0:00</span></div>
+    </div>
+  </section>
+
+  <div class="tabs" role="tablist">
+    <button id="tabAdd" role="tab" aria-selected="true">Add a song</button>
+    <button id="tabQueue" role="tab" aria-selected="false">Queue</button>
+  </div>
+
+  <div id="conn" class="conn" hidden>Reconnecting&hellip;</div>
+
+  <section id="viewAdd">
+    <form id="searchForm" class="search" role="search" autocomplete="off">
+      <input id="q" type="search" placeholder="Song or artist&hellip;" autocomplete="off" autocapitalize="off" enterkeyhint="search" aria-label="Search for a song">
+      <button class="btn" type="submit">Search</button>
+    </form>
+    
+    <div id="paused" class="notice" hidden>Song requests are paused for a moment &ndash; check back soon!</div>
+    <div id="limit" class="notice" hidden></div>
+
+    <!-- Suggestions on the homescreen: more from the artists on the playlist and in the requests -->
+    <div id="picks" hidden>
+      <div class="picks-head">
+        <h2>Ideas for you</h2>
+       <button id="picksMore" class="btn ghost small-btn" type="button"><i class="fa-solid fa-arrows-rotate"></i> New ideas</button>
+      </div>
+      <div id="picksList"></div>
+    </div>
+
+    <div id="results" aria-live="polite"><p class="msg">Type a song or artist above and tap Search.</p></div>
+  </section>
+
+  <section id="viewQueue" hidden>
+    <h2 style="margin-top:6px">Up next <span id="count"></span></h2>
+    <ol id="list" class="queue"></ol>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script src="guest.js"></script>
+</body>
+</html>
