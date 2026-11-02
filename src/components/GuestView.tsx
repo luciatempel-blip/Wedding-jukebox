@@ -21,34 +21,6 @@ const CATEGORIES = [
   { id: 'romantic', label: 'Stadige Dans', icon: Heart },
 ];
 
-const SongArtwork: React.FC<{ art?: string; className: string }> = ({ art, className }) => {
-  const [failedArt, setFailedArt] = useState<string | null>(null);
-  const hasArtwork = art && failedArt !== art;
-
-  return (
-    <div
-      className={`${className} relative flex items-center justify-center overflow-hidden bg-gradient-to-br from-[#dce8c9] via-[#f5e6dc] to-[#f2c9b8] text-[#476127]`}
-      aria-hidden="true"
-    >
-      {hasArtwork ? (
-        <img
-          src={art}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover"
-          onError={() => setFailedArt(art ?? null)}
-        />
-      ) : (
-        <>
-          <div className="absolute -right-2 -top-2 h-8 w-8 rounded-full border border-white/60" />
-          <div className="absolute -bottom-3 -left-2 h-10 w-10 rounded-full border border-white/60" />
-          <Disc className="relative h-5 w-5 drop-shadow-xs" />
-          <Sparkles className="absolute right-1 top-1 h-3 w-3 text-[#b85433]" />
-        </>
-      )}
-    </div>
-  );
-};
-
 export const GuestView: React.FC<GuestViewProps> = ({
   config,
   nowPlaying,
@@ -347,7 +319,13 @@ export const GuestView: React.FC<GuestViewProps> = ({
                       key={song.key}
                       className="bg-white rounded-xl p-2.5 sm:p-3 flex items-center gap-3 border border-[#ebdcd2] shadow-xs"
                     >
-                      <SongArtwork art={song.art} className="w-12 h-12 rounded-lg shrink-0" />
+                      <div className="w-12 h-12 rounded-lg bg-[#f5e6dc] overflow-hidden shrink-0 flex items-center justify-center">
+                        {song.art ? (
+                          <img src={song.art} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Music className="w-5 h-5 text-[#476127]" />
+                        )}
+                      </div>
                       <div className="min-w-0 flex-1">
                         <h4 className="font-semibold text-sm truncate text-[#2B2622]">
                           {song.title}
@@ -425,7 +403,13 @@ export const GuestView: React.FC<GuestViewProps> = ({
                       key={song.key}
                       className="bg-white rounded-xl p-2.5 sm:p-3 flex items-center gap-3 border border-[#ebdcd2] shadow-xs hover:border-[#476127]/30 transition-all"
                     >
-                      <SongArtwork art={song.art} className="w-12 h-12 rounded-lg shrink-0" />
+                      <div className="w-12 h-12 rounded-lg bg-[#f5e6dc] overflow-hidden shrink-0 flex items-center justify-center">
+                        {song.art ? (
+                          <img src={song.art} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Music className="w-5 h-5 text-[#476127]" />
+                        )}
+                      </div>
                       <div className="min-w-0 flex-1">
                         <h4 className="font-semibold text-sm truncate text-[#2B2622]">
                           {song.title}
@@ -524,7 +508,13 @@ export const GuestView: React.FC<GuestViewProps> = ({
                       #{idx + 1}
                     </span>
 
-                    <SongArtwork art={item.art} className="w-11 h-11 rounded-lg shrink-0" />
+                    <div className="w-11 h-11 rounded-lg bg-[#f5e6dc] overflow-hidden shrink-0 flex items-center justify-center">
+                      {item.art ? (
+                        <img src={item.art} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <Music className="w-5 h-5 text-[#476127]" />
+                      )}
+                    </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
