@@ -14,6 +14,16 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({ src, className }) => {
       src={!src || failedSrc === src ? MUSIC_PLACEHOLDER_ART : src}
       alt=""
       className={className}
+      onLoad={(event) => {
+        const image = event.currentTarget;
+        if (
+          src?.includes('i.ytimg.com/') &&
+          image.naturalWidth <= 120 &&
+          image.naturalHeight <= 90
+        ) {
+          setFailedSrc(src);
+        }
+      }}
       onError={() => {
         if (src) setFailedSrc(src);
       }}
