@@ -1,6 +1,7 @@
 import { JukeboxConfig, NowPlaying, SongItem } from '../types';
 import { resolveYouTubeVideo, fetchPlaylistVideos } from './api';
 import { fetchQueue, updateQueueSong, saveSettingsPatch } from './db';
+import { MUSIC_PLACEHOLDER_ART } from '../utils/thumbnail';
 
 declare global {
   interface Window {
@@ -795,7 +796,7 @@ class PlayerEngine {
 
     win.document.body.innerHTML = `
       <div class="row">
-        <img id="pipArt" class="art" src="${this.nowItem?.art || ''}" alt="" />
+        <img id="pipArt" class="art" alt="" />
         <div class="meta">
           <div id="pipTitle" class="title">${this.nowItem?.title || 'Waiting to start...'}</div>
           <div id="pipArtist" class="artist">${this.nowItem?.artist || 'DJ Console'}</div>
@@ -834,7 +835,15 @@ class PlayerEngine {
 
     if (titleEl) titleEl.textContent = this.nowItem?.title || 'Waiting to start...';
     if (artistEl) artistEl.textContent = this.nowItem?.artist || 'Rudi & Lucia Wedding';
-    if (artEl && this.nowItem?.art) artEl.src = this.nowItem.art;
+    const artSrc = this.nowItem?.art || MUSIC_PLACEHOLDER_ART;
+    if (artEl && artEl.dataset.artSrc !== artSrc) {
+      artEl.dataset.artSrc = artSrc;
+      artEl.onerror = () => {
+        artEl.onerror = null;
+        artEl.src = MUSIC_PLACEHOLDER_ART;
+      };
+      artEl.src = artSrc;
+    }
 
     const cur = this.getCurrentTime();
     const dur = this.getDuration();

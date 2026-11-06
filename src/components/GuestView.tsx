@@ -3,6 +3,7 @@ import { JukeboxConfig, SongItem, NowPlaying } from '../types';
 import { searchSongs, SearchResult, CURATED_WEDDING_PICKS } from '../services/api';
 import { addQueueSong } from '../services/db';
 import { Search, Music, Heart, Sparkles, Check, Clock, Radio, UserCheck, Flame, Disc } from 'lucide-react';
+import { Thumbnail } from './Thumbnail';
 
 interface GuestViewProps {
   config: JukeboxConfig;
@@ -211,11 +212,7 @@ export const GuestView: React.FC<GuestViewProps> = ({
 
           <div className="flex items-center gap-3">
             <div className="w-14 h-14 rounded-xl bg-white/20 shrink-0 overflow-hidden shadow-xs flex items-center justify-center">
-              {nowPlaying.art ? (
-                <img src={nowPlaying.art} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <Music className="w-6 h-6 text-white/80" />
-              )}
+              <Thumbnail src={nowPlaying.art} className="w-full h-full object-cover" />
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="font-serif font-bold text-base leading-tight truncate text-white">
@@ -320,11 +317,7 @@ export const GuestView: React.FC<GuestViewProps> = ({
                       className="bg-white rounded-xl p-2.5 sm:p-3 flex items-center gap-3 border border-[#ebdcd2] shadow-xs"
                     >
                       <div className="w-12 h-12 rounded-lg bg-[#f5e6dc] overflow-hidden shrink-0 flex items-center justify-center">
-                        {song.art ? (
-                          <img src={song.art} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <Music className="w-5 h-5 text-[#476127]" />
-                        )}
+                        <Thumbnail src={song.art} className="w-full h-full object-cover" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <h4 className="font-semibold text-sm truncate text-[#2B2622]">
@@ -404,11 +397,7 @@ export const GuestView: React.FC<GuestViewProps> = ({
                       className="bg-white rounded-xl p-2.5 sm:p-3 flex items-center gap-3 border border-[#ebdcd2] shadow-xs hover:border-[#476127]/30 transition-all"
                     >
                       <div className="w-12 h-12 rounded-lg bg-[#f5e6dc] overflow-hidden shrink-0 flex items-center justify-center">
-                        {song.art ? (
-                          <img src={song.art} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <Music className="w-5 h-5 text-[#476127]" />
-                        )}
+                        <Thumbnail src={song.art} className="w-full h-full object-cover" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <h4 className="font-semibold text-sm truncate text-[#2B2622]">
@@ -509,11 +498,7 @@ export const GuestView: React.FC<GuestViewProps> = ({
                     </span>
 
                     <div className="w-11 h-11 rounded-lg bg-[#f5e6dc] overflow-hidden shrink-0 flex items-center justify-center">
-                      {item.art ? (
-                        <img src={item.art} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <Music className="w-5 h-5 text-[#476127]" />
-                      )}
+                      <Thumbnail src={item.art} className="w-full h-full object-cover" />
                     </div>
 
                     <div className="min-w-0 flex-1">

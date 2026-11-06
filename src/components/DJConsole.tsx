@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { JukeboxConfig, NowPlaying, SongItem } from '../types';
 import { getPlayerEngine } from '../services/playerEngine';
 import { clearEntireQueue, removeQueueSong, updateQueueSong, shuffleActiveQueue } from '../services/db';
+import { Thumbnail } from './Thumbnail';
 import {
   Play,
   Pause,
@@ -356,15 +357,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
 
                   {/* Center Label / Album Artwork */}
                   <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-white/20 bg-[#476127] flex items-center justify-center">
-                    {engineState.nowPlaying?.art ? (
-                      <img
-                        src={engineState.nowPlaying.art}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Disc className="w-6 h-6 text-white/70" />
-                    )}
+                    <Thumbnail src={engineState.nowPlaying?.art} className="w-full h-full object-cover" />
                   </div>
                   <div className="absolute w-3 h-3 rounded-full bg-[#141713] border border-white/20" />
                 </div>
@@ -550,11 +543,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
             <div className="bg-[#1D211B] border border-[#2B3128] rounded-2xl p-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-lg bg-[#252A23] overflow-hidden shrink-0 flex items-center justify-center">
-                  {engineState.nextTrack.art ? (
-                    <img src={engineState.nextTrack.art} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <Disc className="w-5 h-5 text-[#f6d87b]" />
-                  )}
+                  <Thumbnail src={engineState.nextTrack.art} className="w-full h-full object-cover" />
                 </div>
                 <div className="min-w-0">
                   <span className="text-[10px] uppercase tracking-wider font-bold text-[#f6d87b]">
@@ -653,11 +642,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
                       </span>
 
                       <div className="w-10 h-10 rounded-lg bg-[#141713] overflow-hidden shrink-0 flex items-center justify-center">
-                        {item.art ? (
-                          <img src={item.art} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <Disc className="w-4 h-4 text-[#c4beb4]" />
-                        )}
+                        <Thumbnail src={item.art} className="w-full h-full object-cover" />
                       </div>
 
                       <div className="min-w-0 flex-1">
@@ -706,7 +691,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
                       className="bg-[#181B16] border border-[#2B3128] rounded-xl p-2.5 flex items-center gap-2.5 opacity-80"
                     >
                       <div className="w-8 h-8 rounded-lg bg-[#141713] overflow-hidden shrink-0">
-                        {item.art && <img src={item.art} alt="" className="w-full h-full object-cover" />}
+                        <Thumbnail src={item.art} className="w-full h-full object-cover" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold text-white truncate">{item.title}</p>
