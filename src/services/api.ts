@@ -491,11 +491,18 @@ export async function fetchPlaylistVideos(
   apiKey: string,
   max = 100
 ): Promise<{ title: string; artist: string; videoId: string; art?: string }[]> {
+  const fallbackPlaylist = CURATED_WEDDING_PICKS.slice(0, Math.min(max, CURATED_WEDDING_PICKS.length)).map((song) => ({
+    title: song.title,
+    artist: song.artist,
+    videoId: song.videoId || '',
+    art: song.art
+  })).filter((song) => song.videoId);
+
   const m = playlistId.match(/[?&]list=([A-Za-z0-9_-]+)/);
   const cleanId = m ? m[1] : playlistId.trim();
 
   if (!cleanId || !apiKey || apiKey.startsWith('MY_')) {
-    return [];
+    return fallbackPlaylist;
   }
 
   const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
@@ -504,19 +511,25 @@ export async function fetchPlaylistVideos(
   url.searchParams.set('playlistId', cleanId);
   url.searchParams.set('key', apiKey.trim());
 
-  const res = await fetch(url.toString());
-  if (!res.ok) {
-    throw new Error(`Could not load playlist: ${res.status}`);
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      return fallbackPlaylist;
+    }
+    const data = await res.json();
+    const items = (data.items || []).map((item: any) => {
+      const snip = item.snippet || {};
+      const thumbs = snip.thumbnails || {};
+      return {
+        title: snip.title || '',
+        artist: (snip.videoOwnerChannelTitle || snip.channelTitle || '').replace(/ - Topic$/, ''),
+        videoId: snip.resourceId?.videoId || '',
+        art: (thumbs.high || thumbs.medium || thumbs.default || {}).url
+      };
+    }).filter((v: any) => v.videoId && v.title !== 'Private video' && v.title !== 'Deleted video');
+
+    return items.length > 0 ? items : fallbackPlaylist;
+  } catch {
+    return fallbackPlaylist;
   }
-  const data = await res.json();
-  return (data.items || []).map((item: any) => {
-    const snip = item.snippet || {};
-    const thumbs = snip.thumbnails || {};
-    return {
-      title: snip.title || '',
-      artist: (snip.videoOwnerChannelTitle || snip.channelTitle || '').replace(/ - Topic$/, ''),
-      videoId: snip.resourceId?.videoId || '',
-      art: (thumbs.high || thumbs.medium || thumbs.default || {}).url
-    };
-  }).filter((v: any) => v.videoId && v.title !== 'Private video' && v.title !== 'Deleted video');
 }

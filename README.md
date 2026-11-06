@@ -17,6 +17,18 @@ Interactive wedding jukebox with guest song requests, refined responsive DJ cons
 
 ## Deploying to Vercel (Step-by-Step)
 
+### Configure API settings once
+Set the following environment variables in **Vercel → your project → Settings → Environment Variables**:
+
+| Name | Value |
+| --- | --- |
+| `VITE_YOUTUBE_API_KEY` | Your YouTube Data API v3 key |
+| `VITE_FIREBASE_DB_URL` | Your Firebase Realtime Database URL |
+
+Select the environments to use (typically Production, Preview, and Development), then redeploy. Vercel keeps these settings on the project, so you do not need to enter them for every deployment. For local development, copy `.env.example` to `.env.local` and fill in the values there; `.env.local` is ignored by Git.
+
+`VITE_` variables are included in the browser app, so the YouTube key is not secret once deployed. Restrict it in Google Cloud to the YouTube Data API v3 and your site’s HTTP referrers. Configure Firebase Realtime Database security rules separately; the database URL is not an access-control mechanism.
+
 ### Option 1: Via GitHub (Recommended)
 1. Push this project folder to your GitHub repository (e.g. `wedding-jukebox`).
 2. Log into [vercel.com](https://vercel.com).

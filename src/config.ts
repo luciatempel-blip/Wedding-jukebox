@@ -4,9 +4,9 @@ export const DEFAULT_CONFIG: JukeboxConfig = {
   coupleNames: "Rudi and Lucia",
   siteTitle: "Scheepers JukeBox",
   replayAfterMinutes: 30,
-  firebaseDbUrl: "https://wedding-jukebox-ce2d4-default-rtdb.firebaseio.com/",
-  youtubeApiKey: "AIzaSyD3ueltkzjq0b3pVigd0bIXGbxhOtfsMF8",
-  basePlaylistId: "PLC9pq_EfiiU0", // or "https://www.youtube.com/watch?v=Nkmmoq1UHIg&list=PLC9pq_EfiiU0"
+  firebaseDbUrl: import.meta.env.VITE_FIREBASE_DB_URL || "https://example.firebaseio.com/",
+  youtubeApiKey: import.meta.env.VITE_YOUTUBE_API_KEY || "MY_YOUTUBE_API_KEY",
+  basePlaylistId: "PLC9pq_EfiiU0", // optional; if no live API key is configured, the app falls back to the curated party playlist
   adminPin: "20260106",
   maxSongsPerGuest: 0, // 0 = unlimited
   blockExplicit: false,
