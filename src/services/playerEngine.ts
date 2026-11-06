@@ -80,6 +80,7 @@ class PlayerEngine {
   private pipVideoEl: HTMLVideoElement | null = null;
   private pipCanvas: HTMLCanvasElement | null = null;
   private pipCanvasInterval: any = null;
+  private pipVideoFrameListener: (() => void) | null = null;
 
   private statusMessage = 'Ready to start';
 
@@ -122,7 +123,7 @@ class PlayerEngine {
       duration: curDur,
       nextTrack: this.nextItem,
       wakeLockActive: this.wakeLockActive,
-      pipActive: !!(this.pipWindow || (document.pictureInPictureElement && document.pictureInPictureElement === this.pipVideoEl)),
+      pipActive: !!(this.pipWindow || this.isVideoPiPActive()),
       statusMessage: this.statusMessage
     };
 
@@ -855,95 +856,163 @@ class PlayerEngine {
   }
 
   private async toggleVideoPiP(): Promise<boolean> {
+    const video = this.getPiPVideo();
+    const webkitVideo = video as HTMLVideoElement & {
+      webkitPresentationMode?: string;
+      webkitSupportsPresentationMode?: (mode: string) => boolean;
+      webkitSetPresentationMode?: (mode: string) => void;
+    };
+
     if (document.pictureInPictureElement) {
       await document.exitPictureInPicture();
       this.emit();
       return false;
     }
 
-    if (!document.pictureInPictureEnabled) {
-      alert('Picture-in-Picture is not supported on this browser.');
+    if (webkitVideo.webkitPresentationMode === 'picture-in-picture' &&
+        webkitVideo.webkitSetPresentationMode) {
+      webkitVideo.webkitSetPresentationMode('inline');
+      this.emit();
       return false;
+    }
+
+    if (!document.pictureInPictureEnabled || typeof video.requestPictureInPicture !== 'function') {
+      if (webkitVideo.webkitSupportsPresentationMode?.('picture-in-picture') &&
+          webkitVideo.webkitSetPresentationMode) {
+        try {
+          this.startPiPCanvas();
+          const playPromise = video.play();
+          webkitVideo.webkitSetPresentationMode('picture-in-picture');
+          await playPromise;
+          this.emit();
+          return true;
+        } catch (e) {
+          this.stopPiPCanvas();
+          console.warn('WebKit PiP failed:', e);
+          throw new Error('Could not open Picture-in-Picture. Check your browser permissions and try again.');
+        }
+      }
+
+      throw new Error('Picture-in-Picture is not supported by this browser.');
     }
 
     try {
-      if (!this.pipCanvas) {
-        this.pipCanvas = document.createElement('canvas');
-        this.pipCanvas.width = 480;
-        this.pipCanvas.height = 300;
-      }
-      if (!this.pipVideoEl) {
-        this.pipVideoEl = document.createElement('video');
-        this.pipVideoEl.muted = true;
-        this.pipVideoEl.playsInline = true;
-        (this.pipVideoEl as any).srcObject = (this.pipCanvas as any).captureStream(15);
-      }
-
-      await this.pipVideoEl.play();
-
-      this.pipCanvasInterval = setInterval(() => {
-        if (!this.pipCanvas) return;
-        const ctx = this.pipCanvas.getContext('2d');
-        if (!ctx) return;
-
-        ctx.fillStyle = '#191c18';
-        ctx.fillRect(0, 0, 480, 300);
-
-        // Header
-        ctx.fillStyle = '#f6d87b';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText('WEDDING JUKEBOX · DJ CONSOLE', 20, 36);
-
-        // Track title
-        ctx.fillStyle = '#fbf8f3';
-        ctx.font = 'bold 22px Georgia, serif';
-        const title = this.nowItem?.title || 'Waiting to start...';
-        ctx.fillText(title.length > 28 ? title.slice(0, 26) + '...' : title, 20, 80);
-
-        // Artist
-        ctx.fillStyle = '#c4beb4';
-        ctx.font = '16px sans-serif';
-        const artist = this.nowItem?.artist || 'Rudi and Lucia';
-        ctx.fillText(artist.length > 32 ? artist.slice(0, 30) + '...' : artist, 20, 114);
-
-        // Status
-        ctx.fillStyle = this.isPaused ? '#e57373' : '#81c784';
-        ctx.font = '14px sans-serif';
-        ctx.fillText(this.isPaused ? '⏸ PAUSED' : '▶ LIVE PLAYING', 20, 150);
-
-        // Progress bar
-        const cur = this.getCurrentTime();
-        const dur = this.getDuration();
-        const pct = dur > 0 ? Math.min(1, cur / dur) : 0;
-
-        ctx.fillStyle = '#343a31';
-        ctx.fillRect(20, 200, 440, 12);
-        ctx.fillStyle = '#f6d87b';
-        ctx.fillRect(20, 200, 440 * pct, 12);
-
-        // Time
-        const format = (s: number) => {
-          const m = Math.floor(s / 60);
-          const sec = Math.floor(s % 60);
-          return `${m}:${sec < 10 ? '0' : ''}${sec}`;
-        };
-        ctx.fillStyle = '#c4beb4';
-        ctx.font = '13px monospace';
-        ctx.fillText(`${format(cur)} / ${format(dur)}`, 20, 240);
-      }, 250);
-
-      await this.pipVideoEl.requestPictureInPicture();
-      this.pipVideoEl.addEventListener('leavepictureinpicture', () => {
-        clearInterval(this.pipCanvasInterval);
+      this.startPiPCanvas();
+      this.pipVideoFrameListener = () => {
+        this.stopPiPCanvas();
         this.emit();
-      });
+      };
+      video.addEventListener('leavepictureinpicture', this.pipVideoFrameListener, { once: true });
+      await video.play();
+      await video.requestPictureInPicture();
 
       this.emit();
       return true;
-    } catch (e: any) {
+    } catch (e) {
+      this.stopPiPCanvas();
       console.warn('Video PiP failed:', e);
-      return false;
+      throw new Error('Could not open Picture-in-Picture. Check your browser permissions and try again.');
     }
+  }
+
+  private getPiPVideo(): HTMLVideoElement {
+    if (!this.pipCanvas) {
+      this.pipCanvas = document.createElement('canvas');
+      this.pipCanvas.width = 480;
+      this.pipCanvas.height = 300;
+    }
+
+    if (!this.pipVideoEl) {
+      this.pipVideoEl = document.createElement('video');
+      this.pipVideoEl.muted = true;
+      this.pipVideoEl.playsInline = true;
+      this.pipVideoEl.srcObject = this.pipCanvas.captureStream(15);
+      Object.assign(this.pipVideoEl.style, {
+        position: 'fixed',
+        width: '1px',
+        height: '1px',
+        opacity: '0',
+        pointerEvents: 'none'
+      });
+      this.pipVideoEl.addEventListener('webkitpresentationmodechanged', () => {
+        const video = this.pipVideoEl as (HTMLVideoElement & { webkitPresentationMode?: string }) | null;
+        if (video?.webkitPresentationMode !== 'picture-in-picture') this.stopPiPCanvas();
+        this.emit();
+      });
+      document.body.appendChild(this.pipVideoEl);
+    }
+
+    return this.pipVideoEl;
+  }
+
+  private startPiPCanvas() {
+    if (!this.pipCanvas) return;
+    if (this.pipCanvasInterval) clearInterval(this.pipCanvasInterval);
+    const canvas = this.pipCanvas;
+
+    const draw = () => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.fillStyle = '#191c18';
+      ctx.fillRect(0, 0, 480, 300);
+
+      ctx.fillStyle = '#f6d87b';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText('WEDDING JUKEBOX · DJ CONSOLE', 20, 36);
+
+      ctx.fillStyle = '#fbf8f3';
+      ctx.font = 'bold 22px Georgia, serif';
+      const title = this.nowItem?.title || 'Waiting to start...';
+      ctx.fillText(title.length > 28 ? title.slice(0, 26) + '...' : title, 20, 80);
+
+      ctx.fillStyle = '#c4beb4';
+      ctx.font = '16px sans-serif';
+      const artist = this.nowItem?.artist || 'Rudi and Lucia';
+      ctx.fillText(artist.length > 32 ? artist.slice(0, 30) + '...' : artist, 20, 114);
+
+      ctx.fillStyle = this.isPaused ? '#e57373' : '#81c784';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(this.isPaused ? '⏸ PAUSED' : '▶ LIVE PLAYING', 20, 150);
+
+      const cur = this.getCurrentTime();
+      const dur = this.getDuration();
+      const pct = dur > 0 ? Math.min(1, cur / dur) : 0;
+
+      ctx.fillStyle = '#343a31';
+      ctx.fillRect(20, 200, 440, 12);
+      ctx.fillStyle = '#f6d87b';
+      ctx.fillRect(20, 200, 440 * pct, 12);
+
+      const format = (s: number) => {
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+      };
+      ctx.fillStyle = '#c4beb4';
+      ctx.font = '13px monospace';
+      ctx.fillText(`${format(cur)} / ${format(dur)}`, 20, 240);
+    };
+
+    draw();
+    this.pipCanvasInterval = setInterval(draw, 250);
+  }
+
+  private stopPiPCanvas() {
+    if (this.pipCanvasInterval) clearInterval(this.pipCanvasInterval);
+    this.pipCanvasInterval = null;
+    if (this.pipVideoFrameListener && this.pipVideoEl) {
+      this.pipVideoEl.removeEventListener('leavepictureinpicture', this.pipVideoFrameListener);
+    }
+    this.pipVideoFrameListener = null;
+  }
+
+  private isVideoPiPActive() {
+    const video = this.pipVideoEl as (HTMLVideoElement & { webkitPresentationMode?: string }) | null;
+    return !!video && (
+      document.pictureInPictureElement === video ||
+      video.webkitPresentationMode === 'picture-in-picture'
+    );
   }
 }
 

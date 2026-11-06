@@ -105,8 +105,13 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
   };
 
   const handleTogglePiP = async () => {
-    const active = await engine.togglePiP();
-    showToast(active ? 'Picture-in-Picture window opened!' : 'Closed PiP window');
+    try {
+      const active = await engine.togglePiP();
+      showToast(active ? 'Picture-in-Picture window opened!' : 'Closed PiP window');
+    } catch (error) {
+      console.error('Picture-in-Picture failed:', error);
+      showToast(error instanceof Error ? error.message : 'Could not open Picture-in-Picture');
+    }
   };
 
   const handleToggleWakeLock = async () => {
