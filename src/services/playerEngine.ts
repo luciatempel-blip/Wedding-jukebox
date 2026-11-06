@@ -30,15 +30,28 @@ export type PlayerStateCallback = (state: {
   statusMessage: string;
 }) => void;
 
+type DeckTrack = {
+  videoId: string;
+  meta: {
+    title: string;
+    artist: string;
+    art?: string;
+    durationMs?: number;
+  };
+};
+
 class PlayerEngine {
   private config: JukeboxConfig;
   private subscribers = new Set<PlayerStateCallback>();
 
   private playerA: any = null;
   private playerB: any = null;
+  private playerReady: [boolean, boolean] = [false, false];
+  private pendingDeckLoads: [DeckTrack | null, DeckTrack | null] = [null, null];
   private ytReady = false;
 
   private currentDeck: 0 | 1 = 0; // 0 = A, 1 = B
+  private isAdvancing = false;
   private isStarted = false;
   private isPaused = false;
   private masterVolume = 100;
@@ -156,10 +169,7 @@ class PlayerEngine {
         height: '100%',
         playerVars: vars,
         events: {
-          onReady: () => {
-            this.statusMessage = 'Deck A Ready';
-            this.emit();
-          },
+          onReady: () => this.onDeckReady(0),
           onStateChange: (e: any) => this.onPlayerStateChange(0, e.data),
           onError: (e: any) => this.onPlayerError(0, e.data)
         }
@@ -170,10 +180,7 @@ class PlayerEngine {
         height: '100%',
         playerVars: vars,
         events: {
-          onReady: () => {
-            this.statusMessage = 'Deck B Ready';
-            this.emit();
-          },
+          onReady: () => this.onDeckReady(1),
           onStateChange: (e: any) => this.onPlayerStateChange(1, e.data),
           onError: (e: any) => this.onPlayerError(1, e.data)
         }
@@ -181,6 +188,20 @@ class PlayerEngine {
     } catch (err) {
       console.warn('YouTube player mount fallback:', err);
     }
+  }
+
+  private onDeckReady(deck: 0 | 1) {
+    this.playerReady[deck] = true;
+    this.statusMessage = `Deck ${deck === 0 ? 'A' : 'B'} Ready`;
+    this.applyDeckVolume(deck, deck === 0 ? this.deckAGain : this.deckBGain);
+
+    const pending = this.pendingDeckLoads[deck];
+    if (pending) {
+      this.pendingDeckLoads[deck] = null;
+      this.loadAndPlayDeck(deck, pending.videoId, pending.meta);
+    }
+
+    this.emit();
   }
 
   private onPlayerStateChange(deck: 0 | 1, state: number) {
@@ -230,7 +251,14 @@ class PlayerEngine {
     this.statusMessage = 'Loading music...';
     this.emit();
 
-    await this.loadBasePlaylist();
+    const queue = await fetchQueue(this.config);
+    const hasQueuedSongs = queue.some(song => !song.played && !song.failed);
+    if (hasQueuedSongs) {
+      void this.loadBasePlaylist();
+    } else {
+      await this.loadBasePlaylist();
+    }
+
     await this.advanceTrack(0);
     this.requestWakeLock();
   }
@@ -243,10 +271,14 @@ class PlayerEngine {
         this.config.youtubeApiKey,
         150
       );
-      this.statusMessage = `Loaded ${this.basePlaylist.length} base songs`;
+      if (!this.nowItem) {
+        this.statusMessage = `Loaded ${this.basePlaylist.length} base songs`;
+      }
       this.emit();
     } catch (e: any) {
-      this.statusMessage = `Base playlist note: ${e.message || 'using demo'}`;
+      if (!this.nowItem) {
+        this.statusMessage = `Base playlist note: ${e.message || 'using demo'}`;
+      }
       this.emit();
     }
   }
@@ -321,53 +353,58 @@ class PlayerEngine {
   }
 
   public async advanceTrack(fadeSec: number = 8) {
-    if (!this.isStarted) return;
+    if (!this.isStarted || this.isAdvancing) return;
+    this.isAdvancing = true;
     this.statusMessage = 'Transitioning decks...';
     this.emit();
 
-    const nextTrack = await this.fetchNextCandidate();
-    const oldDeck = this.currentDeck;
-    const newDeck = (oldDeck === 0 ? 1 : 0) as 0 | 1;
+    try {
+      const nextTrack = await this.fetchNextCandidate();
+      const oldDeck = this.currentDeck;
+      const newDeck = this.nowItem ? (oldDeck === 0 ? 1 : 0) as 0 | 1 : oldDeck;
 
-    if (!nextTrack) {
-      this.statusMessage = 'End of playlist and queue';
-      this.fadeDeck(oldDeck, 0, fadeSec, () => {
-        this.stopDeck(oldDeck);
-      });
-      this.nowItem = null;
+      if (!nextTrack) {
+        this.statusMessage = 'End of playlist and queue';
+        this.fadeDeck(oldDeck, 0, fadeSec, () => {
+          this.stopDeck(oldDeck);
+        });
+        this.nowItem = null;
+        this.emit();
+        this.syncNowPlayingToSettings();
+        return;
+      }
+
+      this.currentDeck = newDeck;
+      this.nowItem = {
+        id: nextTrack.id,
+        title: nextTrack.title,
+        artist: nextTrack.artist,
+        art: nextTrack.art,
+        videoId: nextTrack.videoId,
+        duration: Math.round((nextTrack.durationMs || 210000) / 1000),
+        pos: 0,
+        at: Date.now(),
+        paused: false,
+        requested: nextTrack.requested
+      };
+
+      this.loadAndPlayDeck(newDeck, nextTrack.videoId, nextTrack);
+      this.fadeDeck(newDeck, 1, fadeSec);
+      if (newDeck !== oldDeck) {
+        this.fadeDeck(oldDeck, 0, fadeSec, () => {
+          this.stopDeck(oldDeck);
+        });
+      }
+
+      this.statusMessage = `Playing: ${nextTrack.title}`;
+      this.updateMediaSession(this.nowItem);
       this.emit();
       this.syncNowPlayingToSettings();
-      return;
+
+      setTimeout(() => this.peekNextTrack(), 3000);
+    } finally {
+      this.isAdvancing = false;
     }
-
-    this.currentDeck = newDeck;
-    this.nowItem = {
-      id: nextTrack.id,
-      title: nextTrack.title,
-      artist: nextTrack.artist,
-      art: nextTrack.art,
-      videoId: nextTrack.videoId,
-      duration: Math.round((nextTrack.durationMs || 210000) / 1000),
-      pos: 0,
-      at: Date.now(),
-      paused: false,
-      requested: nextTrack.requested
-    };
-
-    // Load and play new deck
-    this.loadAndPlayDeck(newDeck, nextTrack.videoId, nextTrack);
-    this.fadeDeck(newDeck, 1, fadeSec);
-    this.fadeDeck(oldDeck, 0, fadeSec, () => {
-      this.stopDeck(oldDeck);
-    });
-
-    this.statusMessage = `Playing: ${nextTrack.title}`;
-    this.updateMediaSession(this.nowItem);
-    this.emit();
-    this.syncNowPlayingToSettings();
-
-    // Pre-resolve next track in queue for instant warm transition
-    setTimeout(() => this.peekNextTrack(), 3000);
   }
 
   private async peekNextTrack() {
@@ -399,9 +436,14 @@ class PlayerEngine {
     }
   }
 
-  private loadAndPlayDeck(deck: 0 | 1, videoId: string, meta: any) {
+  private loadAndPlayDeck(deck: 0 | 1, videoId: string, meta: DeckTrack['meta']) {
     const p = deck === 0 ? this.playerA : this.playerB;
     if (p && typeof p.loadVideoById === 'function') {
+      if (!this.playerReady[deck]) {
+        this.pendingDeckLoads[deck] = { videoId, meta };
+        return;
+      }
+
       try {
         p.loadVideoById(videoId);
         p.playVideo();
@@ -419,7 +461,7 @@ class PlayerEngine {
     targetDemo.duration = Math.round((meta.durationMs || 220000) / 1000);
     targetDemo.title = meta.title;
     targetDemo.artist = meta.artist;
-    targetDemo.art = meta.art;
+    targetDemo.art = meta.art || '';
   }
 
   private fadeDeck(deck: 0 | 1, targetGain: number, durationSec: number, onComplete?: () => void) {
@@ -428,8 +470,19 @@ class PlayerEngine {
     if (intervalRef) clearInterval(intervalRef);
 
     const fromGain = isDeckA ? this.deckAGain : this.deckBGain;
+    if (durationSec <= 0) {
+      if (isDeckA) this.deckAGain = targetGain;
+      else this.deckBGain = targetGain;
+      if (isDeckA) this.fadeIntervalA = null;
+      else this.fadeIntervalB = null;
+      this.applyDeckVolume(deck, targetGain);
+      if (onComplete) onComplete();
+      this.emit();
+      return;
+    }
+
     const startTime = Date.now();
-    const durationMs = Math.max(durationSec * 1000, 100);
+    const durationMs = durationSec * 1000;
 
     const step = () => {
       const elapsed = Date.now() - startTime;
@@ -482,12 +535,14 @@ class PlayerEngine {
 
   private stopDeck(deck: 0 | 1) {
     if (deck === 0) {
+      this.pendingDeckLoads[0] = null;
       this.deckAGain = 0;
       this.demoA.playing = false;
       if (this.playerA && typeof this.playerA.stopVideo === 'function') {
         try { this.playerA.stopVideo(); } catch {}
       }
     } else {
+      this.pendingDeckLoads[1] = null;
       this.deckBGain = 0;
       this.demoB.playing = false;
       if (this.playerB && typeof this.playerB.stopVideo === 'function') {
@@ -543,7 +598,7 @@ class PlayerEngine {
   }
 
   public skipCurrentTrack() {
-    const fade = this.config.skipFadeSeconds || 2;
+    const fade = this.config.skipFadeSeconds ?? 2;
     this.advanceTrack(fade);
   }
 
@@ -579,7 +634,7 @@ class PlayerEngine {
 
       if (dur > 0 && pos > 0) {
         const remaining = dur - pos;
-        const xfade = this.config.crossfadeSeconds || 8;
+        const xfade = this.config.crossfadeSeconds ?? 8;
 
         // Auto trigger crossfade when song is about to end
         if (xfade > 0 && remaining <= xfade && remaining > 0 && dur > xfade * 2) {
