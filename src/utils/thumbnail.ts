@@ -9,14 +9,21 @@ const musicPlaceholderSvg = `
         <stop stop-color="#d8456f"/>
         <stop offset="1" stop-color="#b85433"/>
       </linearGradient>
+      <radialGradient id="shine" cx=".28" cy=".2" r=".9">
+        <stop stop-color="#fff" stop-opacity=".16"/>
+        <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+      </radialGradient>
     </defs>
     <rect width="96" height="96" rx="14" fill="url(#background)"/>
-    <circle cx="48" cy="49" r="31" fill="#35491c"/>
-    <circle cx="48" cy="49" r="26" fill="none" stroke="#fff" stroke-opacity=".14"/>
-    <circle cx="48" cy="49" r="21" fill="none" stroke="#fff" stroke-opacity=".14"/>
+    <circle cx="48" cy="49" r="32" fill="#35491c"/>
+    <circle cx="48" cy="49" r="28" fill="none" stroke="#fff" stroke-opacity=".12"/>
+    <circle cx="48" cy="49" r="24" fill="none" stroke="#fff" stroke-opacity=".12"/>
+    <circle cx="48" cy="49" r="20" fill="none" stroke="#fff" stroke-opacity=".12"/>
     <circle cx="48" cy="49" r="16" fill="url(#label)"/>
+    <circle cx="48" cy="49" r="32" fill="url(#shine)"/>
     <path d="M51 39v17.5a5 5 0 1 1-3-4.58V43l12-2.5v13a5 5 0 1 1-3-4.58V37z" fill="#fff4e8"/>
-    <path d="m22 27 1.5 4.5L28 33l-4.5 1.5L22 39l-1.5-4.5L16 33l4.5-1.5zM72 61l1.5 4.5L78 67l-4.5 1.5L72 73l-1.5-4.5L66 67l4.5-1.5z" fill="#fff4e8" fill-opacity=".85"/>
+    <path d="m22 24 1.5 4.5L28 30l-4.5 1.5L22 36l-1.5-4.5L16 30l4.5-1.5zM74 62l1.5 4.5L80 68l-4.5 1.5L74 74l-1.5-4.5L68 68l4.5-1.5z" fill="#fff4e8" fill-opacity=".9"/>
+    <circle cx="72" cy="27" r="2" fill="#fff4e8" fill-opacity=".8"/>
   </svg>
 `;
 

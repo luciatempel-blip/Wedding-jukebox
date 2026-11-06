@@ -26,8 +26,7 @@ export const GuestView: React.FC<GuestViewProps> = ({
   config,
   nowPlaying,
   queue,
-  onSongAdded,
-  requestsPaused,
+  onSongAdded,  requestsPaused,
   showToast
 }) => {
   const [activeTab, setActiveTab] = useState<'search' | 'queue'>('search');
