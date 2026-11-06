@@ -10,7 +10,6 @@ import {
   Volume2,
   VolumeX,
   Shuffle,
-  PictureInPicture2,
   Sun,
   QrCode,
   Trash2,
@@ -52,7 +51,6 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
     duration: 0,
     nextTrack: null as { title: string; artist: string; art?: string; requested?: boolean } | null,
     wakeLockActive: false,
-    pipActive: false,
     statusMessage: 'Ready'
   });
 
@@ -102,16 +100,6 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
       setPrevVol(engineState.masterVolume);
       handleVolumeChange(0);
       setIsMuted(true);
-    }
-  };
-
-  const handleTogglePiP = async () => {
-    try {
-      const active = await engine.togglePiP();
-      showToast(active ? 'Picture-in-Picture window opened!' : 'Closed PiP window');
-    } catch (error) {
-      console.error('Picture-in-Picture failed:', error);
-      showToast(error instanceof Error ? error.message : 'Could not open Picture-in-Picture');
     }
   };
 
@@ -256,20 +244,6 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
               {isMuted ? '0%' : `${engineState.masterVolume}%`}
             </span>
           </div>
-
-          {/* Picture-in-Picture Toggle */}
-          <button
-            onClick={handleTogglePiP}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
-              engineState.pipActive
-                ? 'bg-[#f6d87b] text-[#141713] border-[#f6d87b] shadow-md shadow-amber-900/20'
-                : 'bg-[#252A23] text-[#c4beb4] border-[#343B30] hover:text-white hover:bg-[#2B3128]'
-            }`}
-            title="Pop out floating Picture-in-Picture player"
-          >
-            <PictureInPicture2 className="w-4 h-4" />
-            <span className="hidden sm:inline">PiP Mode</span>
-          </button>
 
           {/* Wake Lock Screen On */}
           <button

@@ -1,16 +1,11 @@
 import { JukeboxConfig, NowPlaying, SongItem } from '../types';
 import { resolveYouTubeVideo, fetchPlaylistVideos } from './api';
 import { fetchQueue, updateQueueSong, saveSettingsPatch } from './db';
-import { MUSIC_PLACEHOLDER_ART } from '../utils/thumbnail';
 
 declare global {
   interface Window {
     YT: any;
     onYouTubeIframeAPIReady: () => void;
-    documentPictureInPicture?: {
-      requestWindow: (options: { width: number; height: number }) => Promise<Window>;
-      window?: Window;
-    };
   }
 }
 
@@ -27,7 +22,6 @@ export type PlayerStateCallback = (state: {
   duration: number;
   nextTrack: { title: string; artist: string; art?: string; requested?: boolean } | null;
   wakeLockActive: boolean;
-  pipActive: boolean;
   statusMessage: string;
 }) => void;
 
@@ -76,13 +70,6 @@ class PlayerEngine {
   private demoA = { playing: false, elapsed: 0, since: 0, duration: 200, title: '', artist: '', art: '' };
   private demoB = { playing: false, elapsed: 0, since: 0, duration: 200, title: '', artist: '', art: '' };
 
-  // PiP reference
-  private pipWindow: Window | null = null;
-  private pipVideoEl: HTMLVideoElement | null = null;
-  private pipCanvas: HTMLCanvasElement | null = null;
-  private pipCanvasInterval: any = null;
-  private pipVideoFrameListener: (() => void) | null = null;
-
   private statusMessage = 'Ready to start';
 
   constructor(config: JukeboxConfig) {
@@ -124,7 +111,6 @@ class PlayerEngine {
       duration: curDur,
       nextTrack: this.nextItem,
       wakeLockActive: this.wakeLockActive,
-      pipActive: !!(this.pipWindow || this.isVideoPiPActive()),
       statusMessage: this.statusMessage
     };
 
@@ -136,7 +122,6 @@ class PlayerEngine {
       }
     }
 
-    this.updatePiPContent();
   }
 
   private initYouTube() {
@@ -739,290 +724,6 @@ class PlayerEngine {
     return false;
   }
 
-  /* ---------- Picture-in-Picture (PiP) ---------- */
-  public async togglePiP(): Promise<boolean> {
-    // 1. Try Document Picture-in-Picture API (Chrome/Edge desktop)
-    if (window.documentPictureInPicture && typeof window.documentPictureInPicture.requestWindow === 'function') {
-      if (this.pipWindow) {
-        this.pipWindow.close();
-        this.pipWindow = null;
-        this.emit();
-        return false;
-      }
-
-      try {
-        const pipWin = await window.documentPictureInPicture.requestWindow({
-          width: 360,
-          height: 220
-        });
-        this.pipWindow = pipWin;
-
-        pipWin.addEventListener('pagehide', () => {
-          this.pipWindow = null;
-          this.emit();
-        });
-
-        this.setupDocumentPiP(pipWin);
-        this.emit();
-        return true;
-      } catch (e) {
-        console.warn('Document PiP failed, trying Canvas Video PiP fallback:', e);
-      }
-    }
-
-    // 2. Video Picture-in-Picture Fallback (Safari, Firefox, Mobile/Desktop video PiP)
-    return this.toggleVideoPiP();
-  }
-
-  private setupDocumentPiP(win: Window) {
-    // Inject styles
-    const style = win.document.createElement('style');
-    style.textContent = `
-      * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-      body { background: #191c18; color: #fbf8f3; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; height: 100vh; overflow: hidden; user-select: none; }
-      .row { display: flex; align-items: center; gap: 12px; }
-      .art { width: 56px; height: 56px; border-radius: 10px; background: #343a31; object-fit: cover; flex-shrink: 0; }
-      .meta { flex: 1; min-width: 0; }
-      .title { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .artist { color: #c4beb4; font-size: 13px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .bar-wrap { height: 6px; background: #343a31; border-radius: 99px; overflow: hidden; margin: 10px 0 6px; }
-      .bar-fill { height: 100%; width: 0%; background: #f6d87b; border-radius: 99px; transition: width .3s linear; }
-      .controls { display: flex; align-items: center; justify-content: space-between; }
-      .btn { background: #343a31; color: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: 13px; }
-      .btn.primary { background: #476127; }
-      .time { font-size: 11px; color: #c4beb4; }
-    `;
-    win.document.head.appendChild(style);
-
-    win.document.body.innerHTML = `
-      <div class="row">
-        <img id="pipArt" class="art" alt="" />
-        <div class="meta">
-          <div id="pipTitle" class="title">${this.nowItem?.title || 'Waiting to start...'}</div>
-          <div id="pipArtist" class="artist">${this.nowItem?.artist || 'DJ Console'}</div>
-        </div>
-      </div>
-      <div class="bar-wrap"><div id="pipFill" class="bar-fill"></div></div>
-      <div class="controls">
-        <span id="pipTime" class="time">0:00 / 0:00</span>
-        <div style="display:flex;gap:8px;">
-          <button id="pipPlayBtn" class="btn primary">${this.isPaused ? '▶ Play' : '⏸ Pause'}</button>
-          <button id="pipSkipBtn" class="btn">⏭ Skip</button>
-        </div>
-      </div>
-    `;
-
-    const playBtn = win.document.getElementById('pipPlayBtn');
-    const skipBtn = win.document.getElementById('pipSkipBtn');
-
-    if (playBtn) playBtn.onclick = () => this.togglePlayPause();
-    if (skipBtn) skipBtn.onclick = () => this.skipCurrentTrack();
-
-    this.updatePiPContent();
-  }
-
-  private updatePiPContent() {
-    if (!this.pipWindow) return;
-    const doc = this.pipWindow.document;
-    if (!doc) return;
-
-    const titleEl = doc.getElementById('pipTitle');
-    const artistEl = doc.getElementById('pipArtist');
-    const artEl = doc.getElementById('pipArt') as HTMLImageElement;
-    const fillEl = doc.getElementById('pipFill');
-    const timeEl = doc.getElementById('pipTime');
-    const playBtn = doc.getElementById('pipPlayBtn');
-
-    if (titleEl) titleEl.textContent = this.nowItem?.title || 'Waiting to start...';
-    if (artistEl) artistEl.textContent = this.nowItem?.artist || 'Rudi & Lucia Wedding';
-    const artSrc = this.nowItem?.art || MUSIC_PLACEHOLDER_ART;
-    if (artEl && artEl.dataset.artSrc !== artSrc) {
-      artEl.dataset.artSrc = artSrc;
-      artEl.onerror = () => {
-        artEl.onerror = null;
-        artEl.src = MUSIC_PLACEHOLDER_ART;
-      };
-      artEl.src = artSrc;
-    }
-
-    const cur = this.getCurrentTime();
-    const dur = this.getDuration();
-
-    if (fillEl && dur > 0) {
-      fillEl.style.width = `${Math.min(100, (cur / dur) * 100).toFixed(1)}%`;
-    }
-    if (timeEl) {
-      const format = (s: number) => {
-        const m = Math.floor(s / 60);
-        const sec = Math.floor(s % 60);
-        return `${m}:${sec < 10 ? '0' : ''}${sec}`;
-      };
-      timeEl.textContent = `${format(cur)} / ${format(dur)}`;
-    }
-    if (playBtn) {
-      playBtn.textContent = this.isPaused ? '▶ Play' : '⏸ Pause';
-    }
-  }
-
-  private async toggleVideoPiP(): Promise<boolean> {
-    const video = this.getPiPVideo();
-    const webkitVideo = video as HTMLVideoElement & {
-      webkitPresentationMode?: string;
-      webkitSupportsPresentationMode?: (mode: string) => boolean;
-      webkitSetPresentationMode?: (mode: string) => void;
-    };
-
-    if (document.pictureInPictureElement) {
-      await document.exitPictureInPicture();
-      this.emit();
-      return false;
-    }
-
-    if (webkitVideo.webkitPresentationMode === 'picture-in-picture' &&
-        webkitVideo.webkitSetPresentationMode) {
-      webkitVideo.webkitSetPresentationMode('inline');
-      this.emit();
-      return false;
-    }
-
-    if (!document.pictureInPictureEnabled || typeof video.requestPictureInPicture !== 'function') {
-      if (webkitVideo.webkitSupportsPresentationMode?.('picture-in-picture') &&
-          webkitVideo.webkitSetPresentationMode) {
-        try {
-          this.startPiPCanvas();
-          const playPromise = video.play();
-          webkitVideo.webkitSetPresentationMode('picture-in-picture');
-          await playPromise;
-          this.emit();
-          return true;
-        } catch (e) {
-          this.stopPiPCanvas();
-          console.warn('WebKit PiP failed:', e);
-          throw new Error('Could not open Picture-in-Picture. Check your browser permissions and try again.');
-        }
-      }
-
-      throw new Error('Picture-in-Picture is not supported by this browser.');
-    }
-
-    try {
-      this.startPiPCanvas();
-      this.pipVideoFrameListener = () => {
-        this.stopPiPCanvas();
-        this.emit();
-      };
-      video.addEventListener('leavepictureinpicture', this.pipVideoFrameListener, { once: true });
-      await video.play();
-      await video.requestPictureInPicture();
-
-      this.emit();
-      return true;
-    } catch (e) {
-      this.stopPiPCanvas();
-      console.warn('Video PiP failed:', e);
-      throw new Error('Could not open Picture-in-Picture. Check your browser permissions and try again.');
-    }
-  }
-
-  private getPiPVideo(): HTMLVideoElement {
-    if (!this.pipCanvas) {
-      this.pipCanvas = document.createElement('canvas');
-      this.pipCanvas.width = 480;
-      this.pipCanvas.height = 300;
-    }
-
-    if (!this.pipVideoEl) {
-      this.pipVideoEl = document.createElement('video');
-      this.pipVideoEl.muted = true;
-      this.pipVideoEl.playsInline = true;
-      this.pipVideoEl.srcObject = this.pipCanvas.captureStream(15);
-      Object.assign(this.pipVideoEl.style, {
-        position: 'fixed',
-        width: '1px',
-        height: '1px',
-        opacity: '0',
-        pointerEvents: 'none'
-      });
-      this.pipVideoEl.addEventListener('webkitpresentationmodechanged', () => {
-        const video = this.pipVideoEl as (HTMLVideoElement & { webkitPresentationMode?: string }) | null;
-        if (video?.webkitPresentationMode !== 'picture-in-picture') this.stopPiPCanvas();
-        this.emit();
-      });
-      document.body.appendChild(this.pipVideoEl);
-    }
-
-    return this.pipVideoEl;
-  }
-
-  private startPiPCanvas() {
-    if (!this.pipCanvas) return;
-    if (this.pipCanvasInterval) clearInterval(this.pipCanvasInterval);
-    const canvas = this.pipCanvas;
-
-    const draw = () => {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      ctx.fillStyle = '#191c18';
-      ctx.fillRect(0, 0, 480, 300);
-
-      ctx.fillStyle = '#f6d87b';
-      ctx.font = 'bold 16px sans-serif';
-      ctx.fillText('WEDDING JUKEBOX · DJ CONSOLE', 20, 36);
-
-      ctx.fillStyle = '#fbf8f3';
-      ctx.font = 'bold 22px Georgia, serif';
-      const title = this.nowItem?.title || 'Waiting to start...';
-      ctx.fillText(title.length > 28 ? title.slice(0, 26) + '...' : title, 20, 80);
-
-      ctx.fillStyle = '#c4beb4';
-      ctx.font = '16px sans-serif';
-      const artist = this.nowItem?.artist || 'Rudi and Lucia';
-      ctx.fillText(artist.length > 32 ? artist.slice(0, 30) + '...' : artist, 20, 114);
-
-      ctx.fillStyle = this.isPaused ? '#e57373' : '#81c784';
-      ctx.font = '14px sans-serif';
-      ctx.fillText(this.isPaused ? '⏸ PAUSED' : '▶ LIVE PLAYING', 20, 150);
-
-      const cur = this.getCurrentTime();
-      const dur = this.getDuration();
-      const pct = dur > 0 ? Math.min(1, cur / dur) : 0;
-
-      ctx.fillStyle = '#343a31';
-      ctx.fillRect(20, 200, 440, 12);
-      ctx.fillStyle = '#f6d87b';
-      ctx.fillRect(20, 200, 440 * pct, 12);
-
-      const format = (s: number) => {
-        const m = Math.floor(s / 60);
-        const sec = Math.floor(s % 60);
-        return `${m}:${sec < 10 ? '0' : ''}${sec}`;
-      };
-      ctx.fillStyle = '#c4beb4';
-      ctx.font = '13px monospace';
-      ctx.fillText(`${format(cur)} / ${format(dur)}`, 20, 240);
-    };
-
-    draw();
-    this.pipCanvasInterval = setInterval(draw, 250);
-  }
-
-  private stopPiPCanvas() {
-    if (this.pipCanvasInterval) clearInterval(this.pipCanvasInterval);
-    this.pipCanvasInterval = null;
-    if (this.pipVideoFrameListener && this.pipVideoEl) {
-      this.pipVideoEl.removeEventListener('leavepictureinpicture', this.pipVideoFrameListener);
-    }
-    this.pipVideoFrameListener = null;
-  }
-
-  private isVideoPiPActive() {
-    const video = this.pipVideoEl as (HTMLVideoElement & { webkitPresentationMode?: string }) | null;
-    return !!video && (
-      document.pictureInPictureElement === video ||
-      video.webkitPresentationMode === 'picture-in-picture'
-    );
-  }
 }
 
 // Global Singleton instance

@@ -1,13 +1,12 @@
 # Wedding Jukebox · Rudi & Lucia
 
-Interactive wedding jukebox with guest song requests, refined responsive DJ console, background playback, Picture-in-Picture (PiP), lockscreen media controls, and Vercel-ready deployment.
+Interactive wedding jukebox with guest song requests, refined responsive DJ console, background playback, lockscreen media controls, and Vercel-ready deployment.
 
 ## Features
 - **Guest Song Requests**: Guests scan a QR code with their mobile phone (iPhone/Android) and add songs to the live wedding queue.
 - **YouTube Integration**: Direct YouTube Data API v3 integration with video playback and high-resolution album artwork.
 - **House & Afrikaans Curated Suggestions**: Filterable by House & Dance, Afrikaans Treffers, Party Favourites, and Stadige Dans (Love Songs).
 - **Refined DJ Console CSS Grid**: Dedicated 2-column studio layout with dual turntable deck animations, equal-power crossfader, and sticky queue manager.
-- **Picture-in-Picture (PiP)**: Pop-out floating player window (Document PiP on Chrome/Edge and Video PiP on Safari/Firefox) that stays on top of any application.
 - **Persistent Audio Engine**: Built as a Single Page Application (SPA)—navigating between views never interrupts or resets audio playback.
 - **Lock Screen Media Controls**: Full MediaSession API support with live track artwork and play/pause/skip controls on iPhone, iPad, Android, and macOS.
 - **Screen Wake Lock**: Keep display awake toggle so the iPad/laptop screen never sleeps during the party.

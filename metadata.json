@@ -1,6 +1,6 @@
 {
   "name": "Wedding Jukebox - DJ Console & Guest Music Queue",
-  "description": "Interactive wedding jukebox with guest song requests, refined DJ console with responsive CSS grid, PiP floating player, lockscreen media controls, and Vercel deployment support.",
+  "description": "Interactive wedding jukebox with guest song requests, refined DJ console with responsive CSS grid, lockscreen media controls, and Vercel deployment support.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
