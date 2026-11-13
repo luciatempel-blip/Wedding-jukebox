@@ -9,10 +9,8 @@ export const DEFAULT_CONFIG: JukeboxConfig = {
   basePlaylistId: "PLC9pq_EfiiU0", // optional; if no live API key is configured, the app falls back to the curated party playlist
   adminPin: "20260106",
   maxSongsPerGuest: 0, // 0 = unlimited
-  blockExplicit: false,
   bannedWords: ["celine dion"],
   regionCode: "ZA",
-  musicOnly: false,
   suggestionArtists: ["Kurt Darren", "DJ Kent", "Mi Casa", "Francois van Coke", "Bernice West", "Black Coffee", "Master KG"],
   crossfadeSeconds: 8,
   skipFadeSeconds: 3,

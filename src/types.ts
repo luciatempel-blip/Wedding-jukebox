@@ -7,10 +7,8 @@ export interface JukeboxConfig {
   basePlaylistId: string;
   adminPin: string;
   maxSongsPerGuest: number;
-  blockExplicit: boolean;
   bannedWords: string[];
   regionCode: string;
-  musicOnly: boolean;
   suggestionArtists: string[];
   crossfadeSeconds: number;
   skipFadeSeconds: number;
@@ -49,7 +47,17 @@ export interface SettingsState {
   paused?: boolean;       // requests paused
   musicPaused?: boolean;  // audio playback paused
   volume?: number;        // 0-100
-  skipToken?: number;     // incremented to trigger skip remotely
+  playerSeenAt?: number;  // heartbeat from the device that is playing music
+  playerId?: string;      // which browser tab is playing the music
+  command?: RemoteCommand; // request from a remote control to the playing device
+}
+
+export interface RemoteCommand {
+  id: string;
+  type: 'skip' | 'toggle' | 'volume' | 'release';
+  value?: number;
+  target?: string;  // playerId this command is for
+  at: number;
 }
 
 export type ViewMode = 'guest' | 'dj' | 'admin' | 'sign' | 'config';

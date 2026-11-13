@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ViewMode, JukeboxConfig, NowPlaying } from '../types';
-import { Music, Radio, Shield, QrCode, Settings, Play, Pause, SkipForward, Lock, Volume2 } from 'lucide-react';
+import { Music, Radio, Shield, Lock } from 'lucide-react';
 
 interface NavigationProps {
   currentView: ViewMode;
@@ -8,11 +8,16 @@ interface NavigationProps {
   config: JukeboxConfig;
   nowPlaying: NowPlaying | null;
   isPaused: boolean;
-  onTogglePlay: () => void;
-  onSkipTrack: () => void;
   adminUnlocked: boolean;
   onUnlockAdmin: (pin: string) => boolean;
 }
+
+// Three places only: the guest page, the host console and setup. Both host areas need the PIN.
+const TABS: { view: ViewMode; label: string; icon: React.ReactNode; locked: boolean }[] = [
+  { view: 'guest', label: 'Guest Page', icon: <Music className="w-3.5 h-3.5" />, locked: false },
+  { view: 'dj', label: 'Host', icon: <Radio className="w-3.5 h-3.5" />, locked: true },
+  { view: 'admin', label: 'Setup', icon: <Shield className="w-3.5 h-3.5" />, locked: true }
+];
 
 export const Navigation: React.FC<NavigationProps> = ({
   currentView,
@@ -20,8 +25,6 @@ export const Navigation: React.FC<NavigationProps> = ({
   config,
   nowPlaying,
   isPaused,
-  onTogglePlay,
-  onSkipTrack,
   adminUnlocked,
   onUnlockAdmin
 }) => {
@@ -30,8 +33,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   const [enteredPin, setEnteredPin] = useState('');
   const [pinError, setPinError] = useState(false);
 
-  const handleNavClick = (view: ViewMode) => {
-    if ((view === 'dj' || view === 'admin' || view === 'config') && !adminUnlocked) {
+  const handleNavClick = (view: ViewMode, locked: boolean) => {
+    if (locked && !adminUnlocked) {
       setPinTarget(view);
       setEnteredPin('');
       setPinError(false);
@@ -56,11 +59,11 @@ export const Navigation: React.FC<NavigationProps> = ({
   return (
     <>
       <header className="sticky top-0 z-40 bg-[#FCFAF5]/90 backdrop-blur-md border-b border-[#ebdcd2] shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+
           {/* Brand & Couple Names */}
-          <div 
-            onClick={() => onSelectView('guest')} 
+          <div
+            onClick={() => onSelectView('guest')}
             className="cursor-pointer flex items-center gap-2.5 min-w-0"
           >
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#476127] to-[#35491c] flex items-center justify-center text-white shadow-xs shrink-0">
@@ -76,198 +79,37 @@ export const Navigation: React.FC<NavigationProps> = ({
             </div>
           </div>
 
-          {/* Persistent Mini-Player Pill in Header */}
+          {/* Now playing (read-only; controls live in the Host console) */}
           {nowPlaying && nowPlaying.title && (
-            <div className="hidden md:flex items-center gap-3 bg-white border border-[#ebdcd2] rounded-full py-1.5 px-3.5 shadow-xs max-w-md">
-              <div className="flex items-end gap-0.5 h-3.5 w-4 shrink-0 text-[#d8456f]">
-                {!isPaused ? (
-                  <>
-                    <span className="w-1 bg-[#d8456f] rounded-xs animate-eq-1" />
-                    <span className="w-1 bg-[#d8456f] rounded-xs animate-eq-2" />
-                    <span className="w-1 bg-[#d8456f] rounded-xs animate-eq-3" />
-                  </>
-                ) : (
-                  <span className="text-[10px] text-gray-400 font-bold">||</span>
-                )}
-              </div>
-              <div className="min-w-0 text-left">
-                <p className="text-xs font-semibold text-[#2B2622] truncate max-w-[140px] lg:max-w-[180px]">
-                  {nowPlaying.title}
-                </p>
-                <p className="text-[11px] text-[#756c64] truncate max-w-[140px] lg:max-w-[180px]">
-                  {nowPlaying.artist || 'Wedding Playlist'}
-                </p>
-              </div>
-              <div className="flex items-center gap-1 shrink-0 border-l border-[#ebdcd2] pl-2 ml-1">
-                <button
-                  onClick={onTogglePlay}
-                  className="p-1 rounded-full text-[#476127] hover:bg-[#f5e6dc] transition-colors"
-                  title={isPaused ? "Play" : "Pause"}
-                  aria-label={isPaused ? "Play" : "Pause"}
-                >
-                  {isPaused ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4 fill-current" />}
-                </button>
-                <button
-                  onClick={onSkipTrack}
-                  className="p-1 rounded-full text-[#756c64] hover:text-[#b85433] hover:bg-[#f8ece7] transition-colors"
-                  title="Skip to next track"
-                  aria-label="Skip track"
-                >
-                  <SkipForward className="w-4 h-4" />
-                </button>
-              </div>
+            <div className="hidden md:flex items-center gap-2.5 bg-white border border-[#ebdcd2] rounded-full py-1.5 px-3.5 shadow-xs max-w-xs">
+              <span className="text-[11px] font-bold text-[#d8456f] shrink-0">{isPaused ? 'PAUSED' : 'LIVE'}</span>
+              <p className="text-xs font-semibold text-[#2B2622] truncate">{nowPlaying.title}</p>
             </div>
           )}
 
-          {/* Desktop Navigation Tabs */}
-          <nav className="hidden lg:flex items-center gap-1.5 bg-[#f5e6dc]/60 p-1.5 rounded-full border border-[#ebdcd2]">
-            <button
-              onClick={() => handleNavClick('guest')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                currentView === 'guest'
-                  ? 'bg-white text-[#476127] shadow-xs'
-                  : 'text-[#756c64] hover:text-[#2B2622] hover:bg-white/60'
-              }`}
-            >
-              <Music className="w-3.5 h-3.5" />
-              Guest Portal
-            </button>
-
-            <button
-              onClick={() => handleNavClick('dj')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                currentView === 'dj'
-                  ? 'bg-[#191c18] text-[#f6d87b] shadow-xs'
-                  : 'text-[#756c64] hover:text-[#2B2622] hover:bg-white/60'
-              }`}
-            >
-              <Radio className="w-3.5 h-3.5" />
-              DJ Console
-              {!adminUnlocked && <Lock className="w-3 h-3 text-[#b85433]" />}
-            </button>
-
-            <button
-              onClick={() => handleNavClick('admin')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                currentView === 'admin'
-                  ? 'bg-white text-[#b85433] shadow-xs'
-                  : 'text-[#756c64] hover:text-[#2B2622] hover:bg-white/60'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              Admin
-              {!adminUnlocked && <Lock className="w-3 h-3 text-[#b85433]" />}
-            </button>
-
-            <button
-              onClick={() => handleNavClick('sign')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                currentView === 'sign'
-                  ? 'bg-white text-[#2B2622] shadow-xs'
-                  : 'text-[#756c64] hover:text-[#2B2622] hover:bg-white/60'
-              }`}
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              QR Sign
-            </button>
-
-            <button
-              onClick={() => handleNavClick('config')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                currentView === 'config'
-                  ? 'bg-white text-[#476127] shadow-xs'
-                  : 'text-[#756c64] hover:text-[#2B2622]'
-              }`}
-              title="Settings"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              {!adminUnlocked && <Lock className="w-3 h-3 text-[#b85433]" />}
-            </button>
+          {/* Tabs */}
+          <nav className="flex items-center gap-1 bg-[#f5e6dc]/60 p-1 rounded-full border border-[#ebdcd2] shrink-0">
+            {TABS.map((tab) => {
+              const active = currentView === tab.view;
+              return (
+                <button
+                  key={tab.view}
+                  onClick={() => handleNavClick(tab.view, tab.locked)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    active
+                      ? 'bg-white text-[#2B2622] shadow-xs'
+                      : 'text-[#756c64] hover:text-[#2B2622] hover:bg-white/60'
+                  }`}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                  {tab.locked && !adminUnlocked && <Lock className="w-3 h-3 text-[#b85433]" />}
+                </button>
+              );
+            })}
           </nav>
-
-          {/* Quick Mobile Icon Links */}
-          <div className="flex lg:hidden items-center gap-1">
-            <button
-              onClick={() => handleNavClick('dj')}
-              className={`p-2 rounded-xl text-xs font-medium flex items-center gap-1 ${
-                currentView === 'dj' ? 'bg-[#191c18] text-[#f6d87b]' : 'bg-[#f5e6dc] text-[#476127]'
-              }`}
-              title="DJ Console"
-            >
-              <Radio className="w-4 h-4" />
-              <span className="text-[11px] font-bold">DJ</span>
-            </button>
-            <button
-              onClick={() => handleNavClick('sign')}
-              className="p-2 rounded-xl bg-[#f5e6dc] text-[#2B2622]"
-              title="QR Sign"
-            >
-              <QrCode className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleNavClick('admin')}
-              className="p-2 rounded-xl bg-[#f5e6dc] text-[#b85433]"
-              title="Admin"
-            >
-              <Shield className="w-4 h-4" />
-            </button>
-          </div>
         </div>
       </header>
-
-      {/* Mobile Bottom Navigation Bar */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#FCFAF5]/95 backdrop-blur-md border-t border-[#ebdcd2] px-3 py-2 flex items-center justify-around shadow-lg">
-        <button
-          onClick={() => handleNavClick('guest')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-semibold transition-colors ${
-            currentView === 'guest' ? 'text-[#476127]' : 'text-[#756c64]'
-          }`}
-        >
-          <Music className="w-5 h-5" />
-          <span>Guest</span>
-        </button>
-
-        <button
-          onClick={() => handleNavClick('dj')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-semibold transition-colors ${
-            currentView === 'dj' ? 'text-[#2B2622]' : 'text-[#756c64]'
-          }`}
-        >
-          <Radio className="w-5 h-5" />
-          <span>DJ Console</span>
-        </button>
-
-        <button
-          onClick={() => handleNavClick('admin')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-semibold transition-colors ${
-            currentView === 'admin' ? 'text-[#b85433]' : 'text-[#756c64]'
-          }`}
-        >
-          <Shield className="w-5 h-5" />
-          <span>Admin</span>
-        </button>
-
-        <button
-          onClick={() => handleNavClick('sign')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-semibold transition-colors ${
-            currentView === 'sign' ? 'text-[#2B2622]' : 'text-[#756c64]'
-          }`}
-        >
-          <QrCode className="w-5 h-5" />
-          <span>QR Sign</span>
-        </button>
-
-        <button
-          onClick={() => handleNavClick('config')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-semibold transition-colors ${
-            currentView === 'config' ? 'text-[#476127]' : 'text-[#756c64]'
-          }`}
-        >
-          <Settings className="w-5 h-5" />
-          <span>Config</span>
-          {!adminUnlocked && <Lock className="w-3 h-3 text-[#b85433]" />}
-        </button>
-      </div>
 
       {/* PIN Authentication Modal */}
       {showPinModal && (
@@ -280,9 +122,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               Host Security Check
             </h3>
             <p className="text-xs text-center text-[#756c64] mb-5">
-              Please enter the admin PIN to open the {
-                pinTarget === 'dj' ? 'DJ Console' : pinTarget === 'config' ? 'Configuration' : 'Admin Area'
-              }.
+              Enter the admin PIN to open the {pinTarget === 'dj' ? 'Host Console' : 'Setup page'}.
             </p>
 
             <form onSubmit={handlePinSubmit} className="space-y-4">

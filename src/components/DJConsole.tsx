@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { JukeboxConfig, NowPlaying, SongItem } from '../types';
+import { JukeboxConfig, NowPlaying, SongItem, RemoteCommand } from '../types';
 import { getPlayerEngine } from '../services/playerEngine';
 import { clearEntireQueue, removeQueueSong, updateQueueSong, shuffleActiveQueue } from '../services/db';
 import { Thumbnail } from './Thumbnail';
@@ -21,12 +21,24 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+export interface RemoteState {
+  now: NowPlaying | null;      // what the playing device last published
+  musicPaused: boolean;
+  volume: number;
+  playerOnline: boolean;       // the playing device sent a heartbeat recently
+  playerId?: string;
+}
+
 interface DJConsoleProps {
   config: JukeboxConfig;
   queue: SongItem[];
   onRefreshQueue: () => void;
   onOpenQRSign: () => void;
   showToast: (msg: string) => void;
+  remote: RemoteState;
+  onSendCommand: (cmd: { type: RemoteCommand['type']; value?: number; target?: string }) => unknown;
+  requestsPaused: boolean;
+  onToggleRequestsPaused: () => void;
 }
 
 export const DJConsole: React.FC<DJConsoleProps> = ({
@@ -34,7 +46,11 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
   queue,
   onRefreshQueue,
   onOpenQRSign,
-  showToast
+  showToast,
+  remote,
+  onSendCommand,
+  requestsPaused,
+  onToggleRequestsPaused
 }) => {
   const engine = getPlayerEngine(config);
 
@@ -53,6 +69,17 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
     wakeLockActive: false,
     statusMessage: 'Ready'
   });
+
+  // This device plays the music, or it is a remote control for the device that does
+  const live = engineState.isStarted;
+  const started = live || remote.playerOnline;
+  const nowPlaying = live ? engineState.nowPlaying : remote.now;
+  const isPaused = live ? engineState.isPaused : remote.musicPaused;
+  const [volDraft, setVolDraft] = useState<number | null>(null);
+  useEffect(() => { setVolDraft(null); }, [remote.volume]);
+  const masterVol = live ? engineState.masterVolume : (volDraft ?? remote.volume);
+  const posSec = live ? engineState.currentTime : (remote.now?.pos ?? 0);
+  const durSec = live ? engineState.duration : (remote.now?.duration ?? 0);
 
   const [activeQueueTab, setActiveQueueTab] = useState<'queue' | 'history'>('queue');
   const [crossfadeSec, setCrossfadeSec] = useState(config.crossfadeSeconds || 8);
@@ -74,22 +101,33 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
   }, [engine]);
 
   const handleStartMusic = async () => {
+    if (remote.playerOnline && remote.playerId) {
+      // Moving the music here: the other device stops so only one device plays
+      onSendCommand({ type: 'release', target: remote.playerId });
+    }
     await engine.startMusic();
     showToast('DJ Decks Activated! 🎶');
   };
 
   const handleTogglePlay = () => {
-    engine.togglePlayPause();
+    if (live) engine.togglePlayPause();
+    else onSendCommand({ type: 'toggle' });
   };
 
   const handleSkip = () => {
-    engine.skipCurrentTrack();
+    if (live) engine.skipCurrentTrack();
+    else onSendCommand({ type: 'skip' });
     showToast('Skipping to next track...');
   };
 
   const handleVolumeChange = (v: number) => {
     setIsMuted(v === 0);
-    engine.setMasterVolume(v);
+    if (live) {
+      engine.setMasterVolume(v);
+    } else {
+      setVolDraft(v);
+      onSendCommand({ type: 'volume', value: v });
+    }
   };
 
   const handleToggleMute = () => {
@@ -97,7 +135,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
       handleVolumeChange(prevVol || 100);
       setIsMuted(false);
     } else {
-      setPrevVol(engineState.masterVolume);
+      setPrevVol(masterVol);
       handleVolumeChange(0);
       setIsMuted(true);
     }
@@ -196,15 +234,15 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-[#2B3128] text-white border border-white/10">
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    engineState.isStarted && !engineState.isPaused
+                    started && !isPaused
                       ? 'bg-emerald-400 animate-pulse'
                       : 'bg-amber-400'
                   }`}
                 />
-                {engineState.isStarted
-                  ? engineState.isPaused
+                {started
+                  ? isPaused
                     ? 'PAUSED'
-                    : 'ON AIR'
+                    : (live ? 'ON AIR' : 'REMOTE')
                   : 'OFFLINE'}
               </span>
             </div>
@@ -224,7 +262,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
               className="text-[#c4beb4] hover:text-white transition-colors"
               title={isMuted ? "Unmute" : "Mute"}
             >
-              {isMuted || engineState.masterVolume === 0 ? (
+              {isMuted || masterVol === 0 ? (
                 <VolumeX className="w-4 h-4 text-red-400" />
               ) : (
                 <Volume2 className="w-4 h-4" />
@@ -234,14 +272,14 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
               type="range"
               min="0"
               max="100"
-              value={isMuted ? 0 : engineState.masterVolume}
+              value={isMuted ? 0 : masterVol}
               onChange={(e) => handleVolumeChange(Number(e.target.value))}
               className="w-20 sm:w-28 accent-[#f6d87b] cursor-pointer"
               title="Master Volume"
               aria-label="Master volume"
             />
             <span className="text-xs font-mono text-[#f6d87b] w-8 text-right font-bold">
-              {isMuted ? '0%' : `${engineState.masterVolume}%`}
+              {isMuted ? '0%' : `${masterVol}%`}
             </span>
           </div>
 
@@ -259,6 +297,19 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
             <span className="hidden md:inline">Stay Awake</span>
           </button>
 
+          {/* Pause guest requests */}
+          <button
+            onClick={onToggleRequestsPaused}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+              requestsPaused
+                ? 'bg-amber-500/20 text-amber-200 border-amber-400/40'
+                : 'bg-[#252A23] text-[#c4beb4] border-[#343B30] hover:text-white'
+            }`}
+            title="Stop or allow guests adding songs"
+          >
+            <span>{requestsPaused ? 'Requests Paused' : 'Pause Requests'}</span>
+          </button>
+
           {/* QR Sign Button */}
           <button
             onClick={onOpenQRSign}
@@ -272,17 +323,19 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
       </div>
 
       {/* Start Music Prompt Banner if not started */}
-      {!engineState.isStarted && (
+      {!live && (
         <div className="bg-gradient-to-r from-[#2B3128] via-[#1D211B] to-[#2B3128] border-2 border-[#476127] rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-2xl">
           <div className="w-16 h-16 rounded-2xl bg-[#476127]/30 border border-[#476127] text-[#f6d87b] flex items-center justify-center mx-auto">
             <Disc className="w-8 h-8 animate-spin-slow" />
           </div>
           <div className="space-y-1 max-w-md mx-auto">
             <h3 className="text-xl sm:text-2xl font-serif font-bold text-white">
-              Connect to Venue Speakers
+              {remote.playerOnline ? 'Music is playing on another device' : 'Connect to Venue Speakers'}
             </h3>
             <p className="text-xs sm:text-sm text-[#c4beb4]">
-              Connect this iPad or laptop to the sound system, turn the device volume up, and tap Start Music below.
+              {remote.playerOnline
+                ? 'This device is a remote control. Skip, pause and volume go to the device playing the music. Tap below only to move the music here.'
+                : 'Connect this iPad or laptop to the sound system, turn the device volume up, and tap Start Music below.'}
             </p>
           </div>
           <button
@@ -290,7 +343,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
             className="px-8 py-4 rounded-2xl text-base font-bold bg-[#476127] hover:bg-[#5d7c35] text-white transition-all transform hover:scale-105 active:scale-95 shadow-xl shadow-green-950/40 flex items-center gap-2.5 mx-auto"
           >
             <Play className="w-5 h-5 fill-current" />
-            Start The Music
+            {remote.playerOnline ? 'Move Music Here' : 'Start The Music'}
           </button>
         </div>
       )}
@@ -321,7 +374,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
               <div className="relative w-28 h-28 sm:w-36 sm:h-36 shrink-0">
                 <div
                   className={`w-full h-full rounded-full bg-gradient-to-tr from-black via-[#191c18] to-black border-4 border-[#343B30] shadow-2xl flex items-center justify-center relative overflow-hidden ${
-                    engineState.isStarted && !engineState.isPaused ? 'animate-spin-slow' : 'animate-spin-paused'
+                    started && !isPaused ? 'animate-spin-slow' : 'animate-spin-paused'
                   }`}
                 >
                   {/* Vinyl Grooves */}
@@ -331,7 +384,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
 
                   {/* Center Label / Album Artwork */}
                   <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-white/20 bg-[#476127] flex items-center justify-center">
-                    <Thumbnail src={engineState.nowPlaying?.art} className="w-full h-full object-cover" />
+                    <Thumbnail src={nowPlaying?.art} className="w-full h-full object-cover" />
                   </div>
                   <div className="absolute w-3 h-3 rounded-full bg-[#141713] border border-white/20" />
                 </div>
@@ -340,7 +393,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
               {/* Title, Artist, and Badges */}
               <div className="min-w-0 flex-1 space-y-1.5">
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                  {engineState.nowPlaying?.requested ? (
+                  {nowPlaying?.requested ? (
                     <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#d8456f]/30 text-[#fdecf2] border border-[#d8456f]/40">
                       Guest Request 🎉
                     </span>
@@ -355,10 +408,10 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
                 </div>
 
                 <h3 className="text-xl sm:text-2xl lg:text-3xl font-serif font-bold text-white tracking-tight leading-snug line-clamp-2">
-                  {engineState.nowPlaying?.title || 'Waiting to start...'}
+                  {nowPlaying?.title || 'Waiting to start...'}
                 </h3>
                 <p className="text-sm sm:text-base text-[#c4beb4] line-clamp-1 font-medium">
-                  {engineState.nowPlaying?.artist || 'Rudi and Lucia Wedding Jukebox'}
+                  {nowPlaying?.artist || 'Rudi and Lucia Wedding Jukebox'}
                 </p>
 
                 {/* Live Position & Scrub Bar */}
@@ -368,17 +421,17 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
                       className="h-full bg-gradient-to-r from-[#f6d87b] to-amber-400 rounded-full transition-all duration-300"
                       style={{
                         width: `${
-                          engineState.duration > 0
-                            ? Math.min(100, (engineState.currentTime / engineState.duration) * 100)
+                          durSec > 0
+                            ? Math.min(100, (posSec / durSec) * 100)
                             : 0
                         }%`
                       }}
                     />
                   </div>
                   <div className="flex justify-between text-xs font-mono text-[#c4beb4]">
-                    <span>{formatTime(engineState.currentTime)}</span>
+                    <span>{formatTime(posSec)}</span>
                     <span className="text-[#f6d87b] font-bold">
-                      {formatRemaining(engineState.currentTime, engineState.duration)}
+                      {formatRemaining(posSec, durSec)}
                     </span>
                   </div>
                 </div>
@@ -390,10 +443,10 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleTogglePlay}
-                  disabled={!engineState.isStarted}
+                  disabled={!started}
                   className="px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-[#141713] hover:bg-[#f6d87b] transition-all flex items-center gap-1.5 disabled:opacity-50 shadow-md active:scale-95"
                 >
-                  {engineState.isPaused ? (
+                  {isPaused ? (
                     <>
                       <Play className="w-4 h-4 fill-current" /> Resume
                     </>
@@ -406,7 +459,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
 
                 <button
                   onClick={handleSkip}
-                  disabled={!engineState.isStarted}
+                  disabled={!started}
                   className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#476127] text-white hover:bg-[#5d7c35] transition-all flex items-center gap-1.5 disabled:opacity-50 active:scale-95 shadow-md"
                 >
                   <SkipForward className="w-4 h-4" />
@@ -429,6 +482,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
                   }}
                   className="w-20 accent-[#f6d87b] cursor-pointer"
                   title="Crossfade duration in seconds"
+                  disabled={!live}
                   aria-label="Crossfade duration"
                 />
                 <span className="font-mono text-[#f6d87b] font-bold w-6">{crossfadeSec}s</span>
@@ -468,7 +522,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
                   />
                 </div>
                 <p className="text-xs text-[#c4beb4] truncate">
-                  {engineState.deckAActive ? (engineState.nowPlaying?.title || 'Active Deck') : 'Fading / Standby'}
+                  {engineState.deckAActive ? (nowPlaying?.title || 'Active Deck') : 'Fading / Standby'}
                 </p>
               </div>
 
@@ -491,7 +545,7 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
                   />
                 </div>
                 <p className="text-xs text-[#c4beb4] truncate">
-                  {engineState.deckBActive ? (engineState.nowPlaying?.title || 'Active Deck') : 'Fading / Standby'}
+                  {engineState.deckBActive ? (nowPlaying?.title || 'Active Deck') : 'Fading / Standby'}
                 </p>
               </div>
             </div>

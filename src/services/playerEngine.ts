@@ -9,6 +9,20 @@ declare global {
   }
 }
 
+// Identifies this browser tab so remote commands can target the device that is playing music
+export const DEVICE_ID: string = (() => {
+  try {
+    let id = sessionStorage.getItem('jb_device_id');
+    if (!id) {
+      id = Math.random().toString(36).slice(2, 10);
+      sessionStorage.setItem('jb_device_id', id);
+    }
+    return id;
+  } catch {
+    return Math.random().toString(36).slice(2, 10);
+  }
+})();
+
 export type PlayerStateCallback = (state: {
   nowPlaying: NowPlaying | null;
   deckAActive: boolean;
@@ -77,6 +91,10 @@ class PlayerEngine {
     this.initYouTube();
     this.initSilentAudio();
     this.startLoop();
+  }
+
+  public get started(): boolean {
+    return this.isStarted;
   }
 
   public updateConfig(config: JukeboxConfig) {
@@ -544,7 +562,7 @@ class PlayerEngine {
     this.applyDeckVolume(0, this.deckAGain);
     this.applyDeckVolume(1, this.deckBGain);
     this.emit();
-    saveSettingsPatch(this.config, { volume: this.masterVolume });
+    if (this.isStarted) saveSettingsPatch(this.config, { volume: this.masterVolume });
   }
 
   public togglePlayPause() {
@@ -582,6 +600,17 @@ class PlayerEngine {
 
     this.emit();
     this.syncNowPlayingToSettings();
+  }
+
+  /** Hand the music over to another device: stop playback here without changing the shared state. */
+  public release() {
+    this.isStarted = false;
+    this.isPaused = true;
+    this.nowItem = null;
+    this.nextItem = null;
+    this.stopDeck(0);
+    this.stopDeck(1);
+    this.emit();
   }
 
   public skipCurrentTrack() {
@@ -641,8 +670,11 @@ class PlayerEngine {
   }
 
   private async syncNowPlayingToSettings() {
-    if (!this.nowItem || !this.isStarted) {
-      saveSettingsPatch(this.config, { now: null, musicPaused: this.isPaused, volume: this.masterVolume });
+    // Only the device that started the music writes playback state.
+    // Idle pages (guest phones, remote controls) must never overwrite it.
+    if (!this.isStarted) return;
+    if (!this.nowItem) {
+      saveSettingsPatch(this.config, { now: null, musicPaused: this.isPaused, volume: this.masterVolume, playerSeenAt: Date.now(), playerId: DEVICE_ID });
       return;
     }
 
@@ -661,7 +693,8 @@ class PlayerEngine {
     saveSettingsPatch(this.config, {
       now: payload,
       musicPaused: this.isPaused,
-      volume: this.masterVolume
+      volume: this.masterVolume,
+      playerSeenAt: Date.now(), playerId: DEVICE_ID
     });
   }
 

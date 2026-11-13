@@ -1,20 +1,26 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ViewMode, JukeboxConfig, SongItem, NowPlaying } from './types';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ViewMode, JukeboxConfig, SongItem, NowPlaying, SettingsState, RemoteCommand } from './types';
 import { loadConfig, saveConfig } from './config';
 import { fetchQueue, fetchSettings, saveSettingsPatch } from './services/db';
-import { getPlayerEngine } from './services/playerEngine';
+import { getPlayerEngine, DEVICE_ID } from './services/playerEngine';
 import { Navigation } from './components/Navigation';
 import { GuestView } from './components/GuestView';
-import { DJConsole } from './components/DJConsole';
+import { DJConsole, RemoteState } from './components/DJConsole';
 import { AdminView } from './components/AdminView';
 import { QRSignModal } from './components/QRSignModal';
 import { ConfigModal } from './components/ConfigModal';
+
+// A device counts as "playing" if it has sent a heartbeat in the last 15 seconds
+const PLAYER_TIMEOUT_MS = 15000;
+
+type CommandInput = Pick<RemoteCommand, 'type' | 'value' | 'target'>;
 
 export default function App() {
   const [config, setConfig] = useState<JukeboxConfig>(loadConfig);
   const [currentView, setCurrentView] = useState<ViewMode>('guest');
   const [queue, setQueue] = useState<SongItem[]>([]);
   const [requestsPaused, setRequestsPaused] = useState(false);
+  const [settings, setSettings] = useState<SettingsState>({});
   const [adminUnlocked, setAdminUnlocked] = useState(() => {
     try {
       return sessionStorage.getItem('jb_admin_unlocked') === '1';
@@ -23,11 +29,17 @@ export default function App() {
     }
   });
 
+  // State of the audio engine on THIS device (only meaningful where music is started)
   const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [isStarted, setIsStarted] = useState(false);
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isQRSignOpen, setIsQRSignOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+
+  const lastCommandId = useRef<string | null>(null);
+  const commandsBaselined = useRef(false);
 
   const engine = getPlayerEngine(config);
 
@@ -47,6 +59,7 @@ export default function App() {
     const unsub = engine.subscribe((state) => {
       setNowPlaying(state.nowPlaying);
       setIsPaused(state.isPaused);
+      setIsStarted(state.isStarted);
     });
     return () => unsub();
   }, [engine]);
@@ -63,14 +76,30 @@ export default function App() {
 
   const refreshSettings = useCallback(async () => {
     try {
-      const s = await fetchSettings(config);
-      if (s) {
-        if (s.paused !== undefined) setRequestsPaused(!!s.paused);
+      const s: SettingsState = (await fetchSettings(config)) || {};
+      setSettings(s);
+      if (s.paused !== undefined) setRequestsPaused(!!s.paused);
+
+      // Remote control: the device playing the music carries out commands sent to it
+      const cmd = s.command;
+      if (!commandsBaselined.current) {
+        // First read: ignore any command already sitting in the database
+        commandsBaselined.current = true;
+        lastCommandId.current = cmd?.id ?? null;
+      } else if (cmd && cmd.id !== lastCommandId.current) {
+        lastCommandId.current = cmd.id;
+        const forThisDevice = !cmd.target || cmd.target === DEVICE_ID;
+        if (engine.started && forThisDevice) {
+          if (cmd.type === 'skip') engine.skipCurrentTrack();
+          else if (cmd.type === 'toggle') engine.togglePlayPause();
+          else if (cmd.type === 'volume' && typeof cmd.value === 'number') engine.setMasterVolume(cmd.value);
+          else if (cmd.type === 'release') engine.release();
+        }
       }
     } catch (e) {
       console.warn('Settings refresh failed', e);
     }
-  }, [config]);
+  }, [config, engine]);
 
   useEffect(() => {
     refreshQueue();
@@ -84,7 +113,18 @@ export default function App() {
     return () => clearInterval(interval);
   }, [refreshQueue, refreshSettings]);
 
+  const sendCommand = useCallback((cmd: CommandInput) => {
+    const command: RemoteCommand = {
+      ...cmd,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      target: cmd.target ?? settings.playerId,
+      at: Date.now()
+    };
+    return saveSettingsPatch(config, { command });
+  }, [config, settings.playerId]);
+
   const handleUnlockAdmin = (pin: string) => {
+    if (!config.adminPin.trim()) return false;
     if (pin.trim() === config.adminPin.trim()) {
       setAdminUnlocked(true);
       try {
@@ -109,9 +149,24 @@ export default function App() {
     engine.updateConfig(newCfg);
   };
 
+  // What the guest page and header show: this device's playback if it is the one playing,
+  // otherwise whatever the playing device last published
+  const playerOnline = !!settings.playerSeenAt && Date.now() - settings.playerSeenAt < PLAYER_TIMEOUT_MS;
+  const publishedNow = playerOnline ? settings.now ?? null : null;
+  const displayNow = isStarted ? nowPlaying : publishedNow;
+  const displayPaused = isStarted ? isPaused : !!settings.musicPaused;
+
+  const remote: RemoteState = {
+    now: publishedNow,
+    musicPaused: !!settings.musicPaused,
+    volume: settings.volume ?? 100,
+    playerOnline,
+    playerId: settings.playerId
+  };
+
   return (
     <div className="min-h-screen bg-[#FCFAF5] flex flex-col font-sans selection:bg-[#476127] selection:text-white">
-      
+
       {/* Navigation Header */}
       <Navigation
         currentView={currentView}
@@ -125,10 +180,8 @@ export default function App() {
           }
         }}
         config={config}
-        nowPlaying={nowPlaying}
-        isPaused={isPaused}
-        onTogglePlay={() => engine.togglePlayPause()}
-        onSkipTrack={() => engine.skipCurrentTrack()}
+        nowPlaying={displayNow}
+        isPaused={displayPaused}
         adminUnlocked={adminUnlocked}
         onUnlockAdmin={handleUnlockAdmin}
       />
@@ -138,7 +191,7 @@ export default function App() {
         {currentView === 'guest' && (
           <GuestView
             config={config}
-            nowPlaying={nowPlaying}
+            nowPlaying={displayNow}
             queue={queue}
             onSongAdded={refreshQueue}
             requestsPaused={requestsPaused}
@@ -153,6 +206,10 @@ export default function App() {
             onRefreshQueue={refreshQueue}
             onOpenQRSign={() => setIsQRSignOpen(true)}
             showToast={showToast}
+            remote={remote}
+            onSendCommand={sendCommand}
+            requestsPaused={requestsPaused}
+            onToggleRequestsPaused={handleToggleRequestsPaused}
           />
         )}
 
@@ -160,11 +217,7 @@ export default function App() {
           <AdminView
             config={config}
             onUpdateConfig={handleSaveConfig}
-            queue={queue}
-            onRefreshQueue={refreshQueue}
-            requestsPaused={requestsPaused}
-            onToggleRequestsPaused={handleToggleRequestsPaused}
-            onOpenQRSign={() => setIsQRSignOpen(true)}
+            onOpenConfig={() => setIsConfigOpen(true)}
             showToast={showToast}
           />
         )}
@@ -190,7 +243,7 @@ export default function App() {
       {toastMessage && (
         <div
           role="status"
-          className="fixed bottom-16 sm:bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#2B2622] text-white px-5 py-3 rounded-full text-xs font-semibold shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-3 duration-200 pointer-events-none flex items-center gap-2 max-w-sm text-center"
+          className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#2B2622] text-white px-5 py-3 rounded-full text-xs font-semibold shadow-2xl border border-white/10 animate-in fade-in slide-in-from-bottom-3 duration-200 pointer-events-none flex items-center gap-2 max-w-sm text-center"
         >
           <span>{toastMessage}</span>
         </div>
