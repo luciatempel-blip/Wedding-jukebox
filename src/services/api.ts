@@ -347,7 +347,8 @@ export async function searchSongs(
   const q = query.trim();
   if (!q) return [];
 
-  const cacheKey = `${normalizeText(q)}_${limit}`;
+  const apiKey = (config.youtubeApiKey || '').trim();
+  const cacheKey = `${normalizeText(q)}_${limit}_${apiKey}_${config.regionCode || ''}`;
   if (searchCache.has(cacheKey)) {
     return searchCache.get(cacheKey)!;
   }
@@ -359,7 +360,6 @@ export async function searchSongs(
   );
 
   // 2. Query YouTube Data API v3
-  const apiKey = (config.youtubeApiKey || '').trim();
   if (apiKey && !apiKey.startsWith('MY_')) {
     try {
       const url = new URL('https://www.googleapis.com/youtube/v3/search');

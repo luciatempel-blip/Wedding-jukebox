@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { JukeboxConfig } from '../types';
-import { DEFAULT_CONFIG, saveConfig } from '../config';
+import { DEFAULT_CONFIG } from '../config';
 import { Settings, Save, RotateCcw, X, Key, Database, Music, Download } from 'lucide-react';
 
 interface ConfigModalProps {
   config: JukeboxConfig;
-  onSaveConfig: (cfg: JukeboxConfig) => void;
+  onSaveConfig: (cfg: JukeboxConfig) => Promise<string>;
   isOpen: boolean;
   onClose: () => void;
   showToast: (msg: string) => void;
@@ -20,26 +20,26 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({
 }) => {
   const [form, setForm] = useState<JukeboxConfig>({ ...config });
 
+  useEffect(() => {
+    if (isOpen) setForm({ ...config });
+  }, [isOpen, config]);
+
   if (!isOpen) return null;
 
   const handleChange = (key: keyof JukeboxConfig, val: any) => {
     setForm(prev => ({ ...prev, [key]: val }));
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveConfig(form);
-    saveConfig(form);
-    showToast('Configuration settings saved!');
+    showToast(await onSaveConfig(form));
     onClose();
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (window.confirm('Reset all settings to original Rudi & Lucia defaults?')) {
       setForm({ ...DEFAULT_CONFIG });
-      onSaveConfig(DEFAULT_CONFIG);
-      saveConfig(DEFAULT_CONFIG);
-      showToast('Reset to default settings');
+      showToast(await onSaveConfig(DEFAULT_CONFIG));
     }
   };
 
@@ -117,6 +117,9 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({
               placeholder="https://your-project-rtdb.firebaseio.com/"
               className="w-full bg-white p-2.5 rounded-xl border border-[#ebdcd2] text-xs focus:border-[#476127] outline-hidden font-mono"
             />
+            <p className="text-[10px] text-[#756c64] mt-1">
+              For settings to sync, every deployed browser must use this same database URL. Set VITE_FIREBASE_DB_URL in your hosting settings.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

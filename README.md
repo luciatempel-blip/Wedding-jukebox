@@ -17,17 +17,16 @@ Interactive wedding jukebox with guest song requests, refined responsive DJ cons
 
 ## Deploying to Vercel (Step-by-Step)
 
-### Configure API settings once
+### Configure shared settings once
 Set the following environment variables in **Vercel → your project → Settings → Environment Variables**:
 
 | Name | Value |
 | --- | --- |
-| `VITE_YOUTUBE_API_KEY` | Your YouTube Data API v3 key |
 | `VITE_FIREBASE_DB_URL` | Your Firebase Realtime Database URL |
 
-Select the environments to use (typically Production, Preview, and Development), then redeploy. Vercel keeps these settings on the project, so you do not need to enter them for every deployment. For local development, copy `.env.example` to `.env.local` and fill in the values there; `.env.local` is ignored by Git.
+Select the environments to use (typically Production, Preview, and Development), then redeploy. The shared Firebase URL must be available to every guest device. For local development, copy `.env.example` to `.env.local` and fill in the values there; `.env.local` is ignored by Git.
 
-`VITE_` variables are included in the browser app, so the YouTube key is not secret once deployed. Restrict it in Google Cloud to the YouTube Data API v3 and your site’s HTTP referrers. Configure Firebase Realtime Database security rules separately; the database URL is not an access-control mechanism.
+After deploying, enter the YouTube API key and playlist in the admin configuration once. The app saves these settings to the shared Firebase `/config` path, and other browsers pick them up automatically. `VITE_YOUTUBE_API_KEY` remains available as an optional fallback. YouTube search calls run in guest browsers, so the key is visible to users; restrict it in Google Cloud to the YouTube Data API v3 and your site’s HTTP referrers. Configure Firebase Realtime Database security rules separately; the database URL is not an access-control mechanism.
 
 The DJ base playlist is loaded from the configured YouTube playlist. If it cannot be fetched, the player does not substitute unrelated tracks; check the playlist ID, API key, and playlist access. YouTube videos that disallow embedding may still be skipped by the player.
 

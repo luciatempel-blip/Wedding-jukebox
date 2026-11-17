@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ViewMode, JukeboxConfig, SongItem, NowPlaying, SettingsState, RemoteCommand } from './types';
 import { loadConfig, saveConfig } from './config';
-import { fetchQueue, fetchSettings, saveSettingsPatch } from './services/db';
+import { fetchQueue, fetchSettings, fetchSharedConfig, saveSettingsPatch, saveSharedConfig } from './services/db';
 import { getPlayerEngine, DEVICE_ID } from './services/playerEngine';
 import { Navigation } from './components/Navigation';
 import { GuestView } from './components/GuestView';
@@ -101,17 +101,44 @@ export default function App() {
     }
   }, [config, engine]);
 
+  const refreshSharedConfig = useCallback(async () => {
+    try {
+      const shared = await fetchSharedConfig(config);
+      if (!shared) return;
+      const nextConfig = { ...config, ...shared };
+      if (
+        nextConfig.youtubeApiKey !== config.youtubeApiKey ||
+        nextConfig.basePlaylistId !== config.basePlaylistId ||
+        nextConfig.regionCode !== config.regionCode
+      ) {
+        engine.updateConfig(nextConfig);
+      }
+      setConfig(current => {
+        const next = { ...current, ...shared };
+        return next.youtubeApiKey !== current.youtubeApiKey ||
+          next.basePlaylistId !== current.basePlaylistId ||
+          next.regionCode !== current.regionCode
+          ? next
+          : current;
+      });
+    } catch (e) {
+      console.warn('Shared configuration refresh failed', e);
+    }
+  }, [config, engine]);
+
   useEffect(() => {
     refreshQueue();
     refreshSettings();
+    refreshSharedConfig();
 
     const interval = setInterval(() => {
       refreshQueue();
       refreshSettings();
+      refreshSharedConfig();
     }, 4500);
 
     return () => clearInterval(interval);
-  }, [refreshQueue, refreshSettings]);
+  }, [refreshQueue, refreshSettings, refreshSharedConfig]);
 
   const sendCommand = useCallback((cmd: CommandInput) => {
     const command: RemoteCommand = {
@@ -143,10 +170,21 @@ export default function App() {
     showToast(nextState ? 'Guest requests paused' : 'Guest requests resumed');
   };
 
-  const handleSaveConfig = (newCfg: JukeboxConfig) => {
+  const handleUpdateConfig = (newCfg: JukeboxConfig) => {
     setConfig(newCfg);
     saveConfig(newCfg);
     engine.updateConfig(newCfg);
+  };
+
+  const handleSaveConfig = async (newCfg: JukeboxConfig): Promise<string> => {
+    handleUpdateConfig(newCfg);
+    try {
+      await saveSharedConfig(newCfg);
+      return 'Configuration saved to Firebase. Other devices using the same database will receive it.';
+    } catch (e) {
+      console.error('Failed to share configuration', e);
+      return 'Saved on this device only. Check the shared Firebase URL and database rules to sync it.';
+    }
   };
 
   // What the guest page and header show: this device's playback if it is the one playing,
@@ -216,7 +254,7 @@ export default function App() {
         {currentView === 'admin' && (
           <AdminView
             config={config}
-            onUpdateConfig={handleSaveConfig}
+            onUpdateConfig={handleUpdateConfig}
             onOpenConfig={() => setIsConfigOpen(true)}
             showToast={showToast}
           />

@@ -2,6 +2,7 @@ import { JukeboxConfig, SongItem, SettingsState } from '../types';
 
 const LS_QUEUE_KEY = 'wedding_jukebox_local_queue';
 const LS_SETTINGS_KEY = 'wedding_jukebox_local_settings';
+type SharedJukeboxConfig = Pick<JukeboxConfig, 'youtubeApiKey' | 'basePlaylistId' | 'regionCode'>;
 
 function getLocalQueue(): Record<string, SongItem> {
   try {
@@ -173,6 +174,32 @@ export async function saveSettingsPatch(
 
   const local = getLocalSettings();
   setLocalSettings({ ...local, ...patch });
+}
+
+export async function fetchSharedConfig(
+  config: JukeboxConfig
+): Promise<Partial<SharedJukeboxConfig> | null> {
+  if (!config.firebaseDbUrl || config.firebaseDbUrl.includes('example')) return null;
+  const data = await firebaseRest(config.firebaseDbUrl, '/config');
+  if (!data || typeof data !== 'object') return null;
+
+  const shared: Partial<SharedJukeboxConfig> = {};
+  if (typeof data.youtubeApiKey === 'string') shared.youtubeApiKey = data.youtubeApiKey;
+  if (typeof data.basePlaylistId === 'string') shared.basePlaylistId = data.basePlaylistId;
+  if (typeof data.regionCode === 'string') shared.regionCode = data.regionCode;
+  return shared;
+}
+
+export async function saveSharedConfig(config: JukeboxConfig): Promise<void> {
+  if (!config.firebaseDbUrl || config.firebaseDbUrl.includes('example')) {
+    throw new Error('Configure a shared Firebase Realtime Database URL before sharing settings.');
+  }
+  const sharedConfig: SharedJukeboxConfig = {
+    youtubeApiKey: config.youtubeApiKey,
+    basePlaylistId: config.basePlaylistId,
+    regionCode: config.regionCode
+  };
+  await firebaseRest(config.firebaseDbUrl, '/config', 'PATCH', sharedConfig);
 }
 
 export async function shuffleActiveQueue(config: JukeboxConfig): Promise<number> {
