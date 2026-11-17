@@ -61,6 +61,8 @@ class PlayerEngine {
 
   private currentDeck: 0 | 1 = 0; // 0 = A, 1 = B
   private isAdvancing = false;
+  private currentTrackGeneration = 0;
+  private lastAdvancedTrackGeneration: number | null = null;
   private isStarted = false;
   private isPaused = false;
   private masterVolume = 100;
@@ -72,6 +74,7 @@ class PlayerEngine {
 
   private basePlaylist: { title: string; artist: string; videoId: string; art?: string }[] = [];
   private basePool: { title: string; artist: string; videoId: string; art?: string }[] = [];
+  private basePlaylistLoadGeneration = 0;
 
   private tickTimer: any = null;
   private publishTimer: any = null;
@@ -98,9 +101,14 @@ class PlayerEngine {
   }
 
   public updateConfig(config: JukeboxConfig) {
+    const playlistChanged =
+      config.basePlaylistId !== this.config.basePlaylistId ||
+      config.youtubeApiKey !== this.config.youtubeApiKey;
     this.config = config;
-    if (this.basePlaylist.length === 0) {
-      this.loadBasePlaylist();
+    if (playlistChanged) {
+      this.basePlaylist = [];
+      this.basePool = [];
+      void this.loadBasePlaylist();
     }
   }
 
@@ -219,10 +227,25 @@ class PlayerEngine {
 
   private onPlayerError(deck: 0 | 1, code: number) {
     console.warn(`Deck ${deck} error code ${code}`);
-    if (deck === this.currentDeck) {
-      this.statusMessage = `Skipped unplayable song (YouTube error ${code})`;
-      setTimeout(() => this.advanceTrack(1), 1000);
+    if (deck !== this.currentDeck || !this.nowItem) return;
+
+    const failedTrack = this.nowItem;
+    const failedGeneration = this.currentTrackGeneration;
+    this.statusMessage = `Skipped unplayable song (YouTube error ${code})`;
+    if (failedTrack.id) {
+      void updateQueueSong(this.config, failedTrack.id, {
+        played: false,
+        playedAt: null,
+        failed: true,
+        failReason: `YouTube error ${code}`
+      }).catch(err => console.warn('Could not mark unplayable song as failed', err));
     }
+    this.emit();
+
+    setTimeout(() => {
+      if (this.currentDeck !== deck || this.currentTrackGeneration !== failedGeneration) return;
+      void this.advanceTrack(1);
+    }, 1000);
   }
 
   private initSilentAudio() {
@@ -269,20 +292,28 @@ class PlayerEngine {
   }
 
   public async loadBasePlaylist() {
-    if (!this.config.basePlaylistId || !this.config.youtubeApiKey) return;
+    const generation = ++this.basePlaylistLoadGeneration;
+    const { basePlaylistId, youtubeApiKey } = this.config;
+    this.basePlaylist = [];
+    this.basePool = [];
+    if (!basePlaylistId) {
+      this.statusMessage = 'No base playlist configured';
+      this.emit();
+      return;
+    }
+
     try {
-      this.basePlaylist = await fetchPlaylistVideos(
-        this.config.basePlaylistId,
-        this.config.youtubeApiKey,
-        150
-      );
+      const playlist = await fetchPlaylistVideos(basePlaylistId, youtubeApiKey, 150);
+      if (generation !== this.basePlaylistLoadGeneration) return;
+      this.basePlaylist = playlist;
       if (!this.nowItem) {
         this.statusMessage = `Loaded ${this.basePlaylist.length} base songs`;
       }
       this.emit();
     } catch (e: any) {
+      if (generation !== this.basePlaylistLoadGeneration) return;
       if (!this.nowItem) {
-        this.statusMessage = `Base playlist note: ${e.message || 'using demo'}`;
+        this.statusMessage = `Base playlist unavailable: ${e.message || 'could not load playlist'}`;
       }
       this.emit();
     }
@@ -359,6 +390,9 @@ class PlayerEngine {
 
   public async advanceTrack(fadeSec: number = 8) {
     if (!this.isStarted || this.isAdvancing) return;
+    const sourceGeneration = this.currentTrackGeneration;
+    if (this.nowItem && this.lastAdvancedTrackGeneration === sourceGeneration) return;
+    if (this.nowItem) this.lastAdvancedTrackGeneration = sourceGeneration;
     this.isAdvancing = true;
     this.statusMessage = 'Transitioning decks...';
     this.emit();
@@ -374,6 +408,7 @@ class PlayerEngine {
           this.stopDeck(oldDeck);
         });
         this.nowItem = null;
+        this.currentTrackGeneration++;
         this.emit();
         this.syncNowPlayingToSettings();
         return;
@@ -392,6 +427,7 @@ class PlayerEngine {
         paused: false,
         requested: nextTrack.requested
       };
+      this.currentTrackGeneration++;
 
       this.loadAndPlayDeck(newDeck, nextTrack.videoId, nextTrack);
       this.fadeDeck(newDeck, 1, fadeSec);
@@ -407,6 +443,11 @@ class PlayerEngine {
       this.syncNowPlayingToSettings();
 
       setTimeout(() => this.peekNextTrack(), 3000);
+    } catch (err) {
+      if (this.currentTrackGeneration === sourceGeneration) {
+        this.lastAdvancedTrackGeneration = null;
+      }
+      throw err;
     } finally {
       this.isAdvancing = false;
     }

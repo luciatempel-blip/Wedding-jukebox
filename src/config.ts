@@ -6,7 +6,7 @@ export const DEFAULT_CONFIG: JukeboxConfig = {
   replayAfterMinutes: 30,
   firebaseDbUrl: import.meta.env.VITE_FIREBASE_DB_URL || "https://example.firebaseio.com/",
   youtubeApiKey: import.meta.env.VITE_YOUTUBE_API_KEY || "MY_YOUTUBE_API_KEY",
-  basePlaylistId: "PLC9pq_EfiiU0", // optional; if no live API key is configured, the app falls back to the curated party playlist
+  basePlaylistId: "PLC9pq_EfiiU0",
   adminPin: "20260106",
   maxSongsPerGuest: 0, // 0 = unlimited
   bannedWords: ["celine dion"],

@@ -29,6 +29,8 @@ Select the environments to use (typically Production, Preview, and Development),
 
 `VITE_` variables are included in the browser app, so the YouTube key is not secret once deployed. Restrict it in Google Cloud to the YouTube Data API v3 and your site’s HTTP referrers. Configure Firebase Realtime Database security rules separately; the database URL is not an access-control mechanism.
 
+The DJ base playlist is loaded from the configured YouTube playlist. If it cannot be fetched, the player does not substitute unrelated tracks; check the playlist ID, API key, and playlist access. YouTube videos that disallow embedding may still be skipped by the player.
+
 ### Option 1: Via GitHub (Recommended)
 1. Push this project folder to your GitHub repository (e.g. `wedding-jukebox`).
 2. Log into [vercel.com](https://vercel.com).

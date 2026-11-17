@@ -454,12 +454,12 @@ export async function resolveYouTubeVideo(
     return found.videoId;
   }
 
+  if (!apiKey || apiKey.startsWith('MY_')) {
+    throw new Error('YouTube API key is required to resolve this song');
+  }
+
   const cleanTitle = (title || '').replace(/[\(\[].*?[\)\]]/g, ' ').trim();
   const query = `${cleanTitle} ${artist || ''} official audio`;
-
-  if (!apiKey || apiKey.startsWith('MY_')) {
-    return 'q_HkI-Xp8iI'; // Kurt Darren Kaptein fallback
-  }
 
   const url = new URL('https://www.googleapis.com/youtube/v3/search');
   url.searchParams.set('part', 'snippet');
@@ -491,30 +491,28 @@ export async function fetchPlaylistVideos(
   apiKey: string,
   max = 100
 ): Promise<{ title: string; artist: string; videoId: string; art?: string }[]> {
-  const fallbackPlaylist = CURATED_WEDDING_PICKS.slice(0, Math.min(max, CURATED_WEDDING_PICKS.length)).map((song) => ({
-    title: song.title,
-    artist: song.artist,
-    videoId: song.videoId || '',
-    art: song.art
-  })).filter((song) => song.videoId);
-
   const m = playlistId.match(/[?&]list=([A-Za-z0-9_-]+)/);
   const cleanId = m ? m[1] : playlistId.trim();
-
-  if (!cleanId || !apiKey || apiKey.startsWith('MY_')) {
-    return fallbackPlaylist;
+  if (!cleanId) {
+    throw new Error('Base playlist ID is not configured');
+  }
+  if (!apiKey || apiKey.startsWith('MY_')) {
+    throw new Error('YouTube API key is required to load the base playlist');
   }
 
-  const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
-  url.searchParams.set('part', 'snippet');
-  url.searchParams.set('maxResults', String(Math.min(max, 50)));
-  url.searchParams.set('playlistId', cleanId);
-  url.searchParams.set('key', apiKey.trim());
+  const videos: { title: string; artist: string; videoId: string; art?: string }[] = [];
+  let pageToken: string | undefined;
+  while (videos.length < max) {
+    const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+    url.searchParams.set('part', 'snippet');
+    url.searchParams.set('maxResults', String(Math.min(max - videos.length, 50)));
+    url.searchParams.set('playlistId', cleanId);
+    url.searchParams.set('key', apiKey.trim());
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
 
-  try {
     const res = await fetch(url.toString());
     if (!res.ok) {
-      return fallbackPlaylist;
+      throw new Error(`YouTube playlist error: ${res.status}`);
     }
     const data = await res.json();
     const items = (data.items || []).map((item: any) => {
@@ -527,9 +525,10 @@ export async function fetchPlaylistVideos(
         art: (thumbs.high || thumbs.medium || thumbs.default || {}).url
       };
     }).filter((v: any) => v.videoId && v.title !== 'Private video' && v.title !== 'Deleted video');
-
-    return items.length > 0 ? items : fallbackPlaylist;
-  } catch {
-    return fallbackPlaylist;
+    videos.push(...items);
+    pageToken = data.nextPageToken;
+    if (!pageToken) break;
   }
+
+  return videos.slice(0, max);
 }
