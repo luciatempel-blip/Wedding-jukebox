@@ -17,6 +17,7 @@ import {
   Disc,
   Clock,
   ArrowUp,
+  RotateCcw,
   Sparkles,
   AlertCircle
 } from 'lucide-react';
@@ -165,6 +166,20 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
       onRefreshQueue();
     } catch {
       showToast('Could not remove song');
+    }
+  };
+
+  const handleReturnToQueue = async (item: SongItem) => {
+    const active = queue.filter(s => !s.played && !s.failed);
+    const order = active.length > 0
+      ? Math.max(...active.map(s => s.order || 0)) + 1
+      : Date.now();
+    try {
+      await updateQueueSong(config, item.id, { played: false, playedAt: null, order });
+      showToast(`Returned "${item.title}" to the queue`);
+      onRefreshQueue();
+    } catch {
+      showToast('Could not return song to queue');
     }
   };
 
@@ -728,6 +743,14 @@ export const DJConsole: React.FC<DJConsoleProps> = ({
                       <span className="text-[10px] text-gray-400 font-mono">
                         {item.playedAt ? new Date(item.playedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Played'}
                       </span>
+                      <button
+                        onClick={() => handleReturnToQueue(item)}
+                        className="p-1.5 rounded-lg bg-[#141713] text-[#f6d87b] hover:bg-[#476127] hover:text-white transition-colors"
+                        title="Return to queue"
+                        aria-label={`Return ${item.title} to queue`}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   ))
                 )}

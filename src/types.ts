@@ -24,7 +24,7 @@ export interface SongItem {
   videoId?: string;
   order: number;
   played?: boolean;
-  playedAt?: number;
+  playedAt?: number | null;
   failed?: boolean;
   failReason?: string;
   requesterName?: string;
